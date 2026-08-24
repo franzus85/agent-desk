@@ -2,8 +2,15 @@ import { z } from "zod";
 import type { Tool } from "./tool.js";
 
 export class ToolNotFoundError extends Error {
-  constructor(public readonly toolName: string) {
-    super(`No tool named "${toolName}".`);
+  constructor(
+    public readonly toolName: string,
+    public readonly availableTools: string[],
+  ) {
+    super(
+      availableTools.length > 0
+        ? `No tool named "${toolName}". Available tools: ${availableTools.join(", ")}.`
+        : `No tool named "${toolName}". No tools are registered.`,
+    );
     this.name = "ToolNotFoundError";
   }
 }
@@ -49,7 +56,7 @@ export class ToolRegistry {
   async execute(name: string, rawInput: unknown): Promise<unknown> {
     const tool = this.tools.get(name);
     if (!tool) {
-      throw new ToolNotFoundError(name);
+      throw new ToolNotFoundError(name, [...this.tools.keys()]);
     }
 
     const parsed = tool.inputSchema.safeParse(rawInput);

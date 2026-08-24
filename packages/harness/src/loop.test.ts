@@ -229,4 +229,43 @@ describe("runAgent", () => {
       ],
     });
   });
+
+  it("stops after the same call repeats instead of executing it again", async () => {
+    const registry = new ToolRegistry();
+    registry.register(
+      defineTool({
+        name: "search",
+        description: "Searches for something",
+        inputSchema: z.object({ query: z.string() }),
+        handler: async () => ["result"],
+      }),
+    );
+
+    function repeatedSearchTurn(id: string): FakeTurn {
+      return {
+        message: {
+          content: [
+            { type: "tool_use", id, name: "search", input: { query: "q3" }, caller: { type: "direct" } },
+          ],
+          stop_reason: "tool_use",
+        },
+      };
+    }
+
+    const { client, state } = createFakeClient([
+      repeatedSearchTurn("call_1"),
+      repeatedSearchTurn("call_2"),
+      repeatedSearchTurn("call_3"),
+      endTurn,
+    ]);
+
+    const events = await collect(
+      runAgent({ client, registry, task: "search repeatedly", runId: "run-5" }),
+    );
+
+    const startedCalls = events.filter((e) => e.type === "tool.started");
+    expect(startedCalls).toHaveLength(2); // the 3rd identical call is blocked before execution
+    expect(events.at(-1)).toMatchObject({ type: "run.finished", stopReason: "repeat_detected" });
+    expect(state.calls).toBe(3); // 3rd API response is what revealed the repeat; no 4th call needed
+  });
 });

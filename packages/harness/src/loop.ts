@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentEvent } from "@agent-desk/protocol";
 import type { ToolRegistry } from "./registry.js";
 import { createChannel } from "./channel.js";
+import { stableStringify } from "./stable-stringify.js";
 
 export interface AgentMessage {
   content: Anthropic.ContentBlock[];
@@ -34,15 +35,33 @@ export interface RunAgentOptions {
   maxTurns?: number;
   maxTokens?: number;
   thinking?: { type: "adaptive" };
+  repeatLimit?: number;
 }
 
 const DEFAULT_MODEL = "claude-opus-5";
 const DEFAULT_MAX_TURNS = 8;
 const DEFAULT_MAX_TOKENS = 64000;
+const DEFAULT_REPEAT_LIMIT = 3;
 
 interface ToolOutcome {
   event: AgentEvent;
   toolResult: Anthropic.ToolResultBlockParam;
+}
+
+interface CallRecord {
+  name: string;
+  argsSignature: string;
+}
+
+// True if issuing this call would complete `limit` identical calls in a row.
+// Only the last (limit - 1) history entries matter — anything older is
+// irrelevant to "N times consecutively".
+function completesRepeat(history: CallRecord[], name: string, argsSignature: string, limit: number): boolean {
+  if (limit <= 1) return true;
+  const windowSize = limit - 1;
+  if (history.length < windowSize) return false;
+  const window = history.slice(history.length - windowSize);
+  return window.every((entry) => entry.name === name && entry.argsSignature === argsSignature);
 }
 
 export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentEvent> {
@@ -55,6 +74,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
     maxTurns = DEFAULT_MAX_TURNS,
     maxTokens = DEFAULT_MAX_TOKENS,
     thinking = { type: "adaptive" },
+    repeatLimit = DEFAULT_REPEAT_LIMIT,
   } = options;
 
   yield { type: "run.started", runId, ts: Date.now(), task };
@@ -66,6 +86,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
   }));
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: task }];
+  const callHistory: CallRecord[] = [];
 
   for (let turn = 0; turn < maxTurns; turn++) {
     const stream = client.messages.stream({ model, max_tokens: maxTokens, thinking, tools, messages });
@@ -114,6 +135,24 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
     const toolUseBlocks = message.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
+
+    const callsWithSignature = toolUseBlocks.map((call) => ({
+      call,
+      argsSignature: stableStringify(call.input),
+    }));
+
+    const wouldRepeat = callsWithSignature.some(({ call, argsSignature }) =>
+      completesRepeat(callHistory, call.name, argsSignature, repeatLimit),
+    );
+
+    if (wouldRepeat) {
+      yield { type: "run.finished", runId, ts: Date.now(), stopReason: "repeat_detected" };
+      return;
+    }
+
+    for (const { call, argsSignature } of callsWithSignature) {
+      callHistory.push({ name: call.name, argsSignature });
+    }
 
     for (const call of toolUseBlocks) {
       yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: call.name, input: call.input };

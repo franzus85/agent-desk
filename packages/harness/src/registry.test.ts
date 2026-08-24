@@ -40,6 +40,15 @@ describe("ToolRegistry", () => {
     await expect(registry.execute("missing", {})).rejects.toBeInstanceOf(ToolNotFoundError);
   });
 
+  it("lists available tools in the ToolNotFoundError message", async () => {
+    const registry = new ToolRegistry();
+    registry.register(echoTool);
+
+    await expect(registry.execute("missing", {})).rejects.toThrow(
+      'No tool named "missing". Available tools: echo.',
+    );
+  });
+
   it("throws ToolInputValidationError for invalid input", async () => {
     const registry = new ToolRegistry();
     registry.register(echoTool);
