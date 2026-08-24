@@ -63,4 +63,41 @@ describe("ToolRegistry", () => {
     registry.register(echoTool);
     expect(() => registry.register(echoTool)).toThrow();
   });
+
+  it("registerRemote skips local validation and uses the given JSON schema as-is", async () => {
+    const registry = new ToolRegistry();
+    registry.registerRemote({
+      name: "remote.echo",
+      description: "A remote tool with a pre-existing JSON schema.",
+      inputSchema: { type: "object", properties: { message: { type: "string" } } },
+      handler: async (input) => ({ received: input }),
+    });
+
+    const [spec] = registry.specs();
+    expect(spec?.inputSchema).toEqual({ type: "object", properties: { message: { type: "string" } } });
+
+    const result = await registry.execute("remote.echo", { message: "anything, unvalidated" });
+    expect(result).toEqual({ received: { message: "anything, unvalidated" } });
+  });
+
+  it("collides when two servers' tools are merged under the same bare name", () => {
+    // This is the failure mode namespacing exists to prevent: two servers
+    // that each independently named a tool "search" can't coexist in one
+    // registry without a prefix.
+    const registry = new ToolRegistry();
+    registry.registerRemote({
+      name: "search",
+      description: "notes server's search",
+      inputSchema: {},
+      handler: async () => [],
+    });
+    expect(() =>
+      registry.registerRemote({
+        name: "search",
+        description: "wiki server's search",
+        inputSchema: {},
+        handler: async () => [],
+      }),
+    ).toThrow('Tool "search" is already registered.');
+  });
 });

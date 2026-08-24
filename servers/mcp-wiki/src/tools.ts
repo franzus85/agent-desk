@@ -29,7 +29,7 @@ export const registry = new ToolRegistry();
 
 registry.register(
   defineTool({
-    name: "wiki.search",
+    name: "search",
     description: "Searches wiki page titles and bodies for a query substring.",
     inputSchema: z.object({ query: z.string() }),
     handler: async ({ query }) => {
@@ -43,13 +43,13 @@ registry.register(
 
 registry.register(
   defineTool({
-    name: "wiki.get",
+    name: "get",
     description: "Fetches a wiki page's full content by id.",
     inputSchema: z.object({ id: z.string() }),
     handler: async ({ id }) => {
       const page = pages.find((candidate) => candidate.id === id);
       if (!page) {
-        throw new Error(`No wiki page with id "${id}". Call wiki.search to find valid ids.`);
+        throw new Error(`No wiki page with id "${id}". Call search to find valid ids.`);
       }
       return page;
     },

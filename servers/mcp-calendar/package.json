@@ -1,0 +1,18 @@
+{
+  "name": "@agent-desk/mcp-calendar",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-desk/harness": "workspace:*",
+    "@agent-desk/mcp-client": "workspace:*",
+    "@agent-desk/mcp-server-kit": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
+  }
+}

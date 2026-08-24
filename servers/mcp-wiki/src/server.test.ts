@@ -47,11 +47,11 @@ describe("mcp-wiki server (real HTTP process)", () => {
     if (outcome.status !== "complete") throw new Error("unreachable");
 
     const names = (outcome.result["tools"] as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["wiki.search", "wiki.get"]);
+    expect(names).toEqual(["search", "get"]);
   });
 
   it("responds to tools/call over SSE (progress notification, then the result)", async () => {
-    const outcome = await client.callTool("wiki.search", { query: "roadmap" });
+    const outcome = await client.callTool("search", { query: "roadmap" });
     expect(outcome.status).toBe("complete");
     if (outcome.status !== "complete") throw new Error("unreachable");
 
@@ -73,7 +73,7 @@ describe("mcp-wiki server (real HTTP process)", () => {
         id: 1,
         method: "tools/call",
         params: {
-          name: "wiki.search",
+          name: "search",
           arguments: { query: "x" },
           _meta: {
             "io.modelcontextprotocol/protocolVersion": "2026-07-28",

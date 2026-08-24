@@ -31,39 +31,73 @@ export interface ToolSpec {
   inputSchema: unknown;
 }
 
-export class ToolRegistry {
-  // Tool<any, any>: a heterogeneous registry of Tool<In, Out> can't be stored as
-  // Tool<unknown, unknown> — handler is a function-typed property, so strict
-  // contravariant checking rejects narrower handlers at that slot. `any` is the
-  // deliberate erasure point; each tool keeps full typing wherever it's defined.
-  private readonly tools = new Map<string, Tool<any, any>>();
+export interface RemoteTool {
+  name: string;
+  description: string;
+  // Already a JSON Schema (e.g. from an MCP server's tools/list) — unlike
+  // register()'s Zod-backed Tool, there is no local schema to validate
+  // against, so the handler receives the raw input as-is.
+  inputSchema: unknown;
+  handler: (input: unknown) => Promise<unknown>;
+}
 
+interface RegisteredEntry {
+  name: string;
+  description: string;
+  jsonSchema: unknown;
+  execute: (rawInput: unknown) => Promise<unknown>;
+}
+
+export class ToolRegistry {
+  private readonly entries = new Map<string, RegisteredEntry>();
+
+  // Local tool: input validated against its Zod schema before the handler runs.
   register(tool: Tool<any, any>): void {
-    if (this.tools.has(tool.name)) {
-      throw new Error(`Tool "${tool.name}" is already registered.`);
+    this.add({
+      name: tool.name,
+      description: tool.description,
+      jsonSchema: z.toJSONSchema(tool.inputSchema),
+      execute: async (rawInput) => {
+        const parsed = tool.inputSchema.safeParse(rawInput);
+        if (!parsed.success) {
+          throw new ToolInputValidationError(tool.name, parsed.error);
+        }
+        return tool.handler(parsed.data);
+      },
+    });
+  }
+
+  // Remote tool (e.g. MCP-backed): schema and validation live on the far
+  // side, so we register it directly — no Zod schema required here.
+  registerRemote(tool: RemoteTool): void {
+    this.add({
+      name: tool.name,
+      description: tool.description,
+      jsonSchema: tool.inputSchema,
+      execute: tool.handler,
+    });
+  }
+
+  private add(entry: RegisteredEntry): void {
+    if (this.entries.has(entry.name)) {
+      throw new Error(`Tool "${entry.name}" is already registered.`);
     }
-    this.tools.set(tool.name, tool);
+    this.entries.set(entry.name, entry);
   }
 
   specs(): ToolSpec[] {
-    return [...this.tools.values()].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: z.toJSONSchema(tool.inputSchema),
+    return [...this.entries.values()].map(({ name, description, jsonSchema }) => ({
+      name,
+      description,
+      inputSchema: jsonSchema,
     }));
   }
 
   async execute(name: string, rawInput: unknown): Promise<unknown> {
-    const tool = this.tools.get(name);
-    if (!tool) {
-      throw new ToolNotFoundError(name, [...this.tools.keys()]);
+    const entry = this.entries.get(name);
+    if (!entry) {
+      throw new ToolNotFoundError(name, [...this.entries.keys()]);
     }
-
-    const parsed = tool.inputSchema.safeParse(rawInput);
-    if (!parsed.success) {
-      throw new ToolInputValidationError(name, parsed.error);
-    }
-
-    return tool.handler(parsed.data);
+    return entry.execute(rawInput);
   }
 }

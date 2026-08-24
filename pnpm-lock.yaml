@@ -222,6 +222,9 @@ importers:
 
   packages/harness:
     dependencies:
+      '@agent-desk/mcp-client':
+        specifier: workspace:*
+        version: link:../mcp-client
       '@agent-desk/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -264,6 +267,25 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  servers/mcp-calendar:
+    dependencies:
+      '@agent-desk/harness':
+        specifier: workspace:*
+        version: link:../../packages/harness
+      '@agent-desk/mcp-client':
+        specifier: workspace:*
+        version: link:../../packages/mcp-client
+      '@agent-desk/mcp-server-kit':
+        specifier: workspace:*
+        version: link:../../packages/mcp-server-kit
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
 
   servers/mcp-notes:
     dependencies:

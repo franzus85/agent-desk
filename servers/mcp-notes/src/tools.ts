@@ -29,7 +29,7 @@ export const registry = new ToolRegistry();
 
 registry.register(
   defineTool({
-    name: "notes.list",
+    name: "list",
     description: "Lists all note titles.",
     inputSchema: z.object({}),
     handler: async () => {
@@ -41,7 +41,7 @@ registry.register(
 
 registry.register(
   defineTool({
-    name: "notes.search",
+    name: "search",
     description: "Searches note titles and bodies for a query substring.",
     inputSchema: z.object({ query: z.string() }),
     handler: async ({ query }) => {
@@ -61,7 +61,7 @@ registry.register(
 
 registry.register(
   defineTool({
-    name: "notes.write",
+    name: "write",
     description: "Writes a note under the given title, overwriting any existing note with that title.",
     inputSchema: z.object({ title: z.string(), body: z.string() }),
     handler: async ({ title, body }) => {

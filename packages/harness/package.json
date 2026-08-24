@@ -11,6 +11,7 @@
     "dev:run": "tsx src/dev-run.ts"
   },
   "dependencies": {
+    "@agent-desk/mcp-client": "workspace:*",
     "@agent-desk/protocol": "workspace:*",
     "@anthropic-ai/sdk": "^0.120.0",
     "zod": "^4.4.3"

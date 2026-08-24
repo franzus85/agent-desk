@@ -38,10 +38,10 @@ describe("mcp-notes server (real process, real files)", () => {
     if (outcome.status !== "complete") throw new Error("unreachable");
 
     const names = (outcome.result["tools"] as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["notes.list", "notes.search", "notes.write"]);
+    expect(names).toEqual(["list", "search", "write"]);
 
     const writeTool = (outcome.result["tools"] as Array<{ name: string; inputSchema: unknown }>).find(
-      (t) => t.name === "notes.write",
+      (t) => t.name === "write",
     );
     expect(writeTool?.inputSchema).toMatchObject({
       type: "object",
@@ -50,31 +50,31 @@ describe("mcp-notes server (real process, real files)", () => {
   });
 
   it("writes a real file, then finds it via list and search", async () => {
-    const writeOutcome = await client.callTool("notes.write", {
+    const writeOutcome = await client.callTool("write", {
       title: "sprint-42",
       body: "Shipped the MCP client.",
     });
     expect(writeOutcome.status).toBe("complete");
 
-    const listOutcome = await client.callTool("notes.list", {});
+    const listOutcome = await client.callTool("list", {});
     if (listOutcome.status !== "complete") throw new Error("unreachable");
     const listContent = listOutcome.result["content"] as Array<{ text: string }>;
     expect(JSON.parse(listContent[0]?.text ?? "[]")).toContain("sprint-42");
 
-    const searchOutcome = await client.callTool("notes.search", { query: "MCP client" });
+    const searchOutcome = await client.callTool("search", { query: "MCP client" });
     if (searchOutcome.status !== "complete") throw new Error("unreachable");
     const searchContent = searchOutcome.result["content"] as Array<{ text: string }>;
     expect(searchContent[0]?.text).toContain("sprint-42");
   });
 
   it("returns isError: true (tool execution error) for invalid input, not a hang", async () => {
-    const outcome = await client.callTool("notes.write", { title: "missing-body" });
+    const outcome = await client.callTool("write", { title: "missing-body" });
     if (outcome.status !== "complete") throw new Error("unreachable");
     expect(outcome.result["isError"]).toBe(true);
   });
 
   it("returns a JSON-RPC protocol error for an unknown tool", async () => {
-    await expect(client.callTool("notes.delete", {})).rejects.toMatchObject({
+    await expect(client.callTool("delete", {})).rejects.toMatchObject({
       code: -32602,
     });
   });
