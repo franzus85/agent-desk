@@ -34,7 +34,9 @@ export interface RunAgentOptions {
   model?: string;
   maxTurns?: number;
   maxTokens?: number;
-  thinking?: { type: "adaptive" };
+  // undefined -> default to adaptive thinking; null -> explicitly omit the
+  // param (needed for older models like claude-haiku-4-5 that reject it).
+  thinking?: { type: "adaptive" } | null;
   repeatLimit?: number;
 }
 
@@ -89,7 +91,13 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
   const callHistory: CallRecord[] = [];
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const stream = client.messages.stream({ model, max_tokens: maxTokens, thinking, tools, messages });
+    const stream = client.messages.stream({
+      model,
+      max_tokens: maxTokens,
+      thinking: thinking ?? undefined,
+      tools,
+      messages,
+    });
 
     const channel = createChannel<AgentEvent>();
     stream.on("text", (delta) => {

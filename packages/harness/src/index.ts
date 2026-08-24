@@ -10,3 +10,5 @@ export { runAgent } from "./loop.js";
 export type { AgentClient, AgentStream, AgentMessage, RunAgentOptions } from "./loop.js";
 export { createChannel } from "./channel.js";
 export type { Channel } from "./channel.js";
+export { renderToConsole, formatEvent } from "./console-renderer.js";
+export type { RenderOptions } from "./console-renderer.js";
