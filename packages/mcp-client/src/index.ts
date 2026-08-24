@@ -9,6 +9,8 @@ export {
 } from "./errors.js";
 export { StdioTransport, McpTransportError, McpServerExitedError } from "./stdio-transport.js";
 export type { StdioTransportOptions } from "./stdio-transport.js";
+export { HttpTransport } from "./http-transport.js";
+export type { HttpTransportOptions } from "./http-transport.js";
 export {
   MCP_PROTOCOL_VERSION,
   jsonRpcRequestSchema,
