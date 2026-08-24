@@ -232,6 +232,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/mcp-client:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   packages/protocol:
     dependencies:
       zod:
