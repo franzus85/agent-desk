@@ -7,6 +7,8 @@ export {
   MissingRequiredClientCapabilityError,
   toMcpError,
 } from "./errors.js";
+export { StdioTransport, McpTransportError, McpServerExitedError } from "./stdio-transport.js";
+export type { StdioTransportOptions } from "./stdio-transport.js";
 export {
   MCP_PROTOCOL_VERSION,
   jsonRpcRequestSchema,

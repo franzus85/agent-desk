@@ -14,5 +14,8 @@
     "@agent-desk/protocol": "workspace:*",
     "@anthropic-ai/sdk": "^0.120.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
   }
 }
