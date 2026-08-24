@@ -6,3 +6,7 @@ export {
   ToolInputValidationError,
 } from "./registry.js";
 export type { ToolSpec } from "./registry.js";
+export { runAgent } from "./loop.js";
+export type { AgentClient, AgentStream, AgentMessage, RunAgentOptions } from "./loop.js";
+export { createChannel } from "./channel.js";
+export type { Channel } from "./channel.js";
