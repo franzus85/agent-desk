@@ -218,27 +218,48 @@ Escaping differs across models and it will bite you exactly once.
 
 ### Phase 2 — MCP client & servers · evening 1–2, ~3 h
 
+> **Amendment, 2026-08-24 (discovered while building this phase):** the MCP spec had a breaking
+> revision on **2026-07-28** — four weeks before this PRD was written, and this PRD did not account
+> for it. Worth naming as its own interview story (protocol drift caught by actually implementing
+> against the current spec, not by trusting a training-data prior). Concretely:
+>
+> - **The protocol is now stateless.** No `initialize`/`initialized` handshake, no session IDs.
+>   Protocol version and client capabilities travel on *every* request instead, via `_meta` fields
+>   under the `io.modelcontextprotocol/` prefix.
+> - **Roots and Sampling are deprecated** (SEP-2577) — "SHOULD NOT adopt" for new implementations.
+>   **Elicitation is the only client-side primitive still recommended.** It no longer uses a separate
+>   server→client request either: a server returns `resultType: "input_required"` on the *original*
+>   request, and the client retries that same request with `inputResponses` attached (the "Multi
+>   Round-Trip Requests" pattern).
+> - Bonus: OpenTelemetry trace context (`traceparent`/`tracestate`/`baggage`) is now a native part of
+>   `_meta` — feeds directly into Phase 4.
+>
+> The bullets below are updated to match. The original plan (`initialize` handshake, roots as the
+> file-access permission model) is preserved here in spirit only via this note — see git history /
+> ADR-003 for the full before/after if it comes up in conversation.
+
 **Build:**
 
-- `mcp-client` speaking JSON-RPC 2.0: `initialize`, capability negotiation, `tools/list`,
-  `tools/call`, `listChanged` notifications.
+- `mcp-client` speaking JSON-RPC 2.0: a per-request `_meta` block (`io.modelcontextprotocol/protocolVersion`,
+  `clientCapabilities`, `clientInfo`) instead of a handshake, `tools/list`, `tools/call`.
 - **stdio transport** — spawn the server as a child process, own its lifecycle, log its stderr,
   handle a crash mid-call.
 - **Streamable HTTP transport** for `mcp-wiki`, so you have actually written both.
 - Three toy servers with deliberately different shapes: `mcp-notes` (local files — your untrusted
   content source later), `mcp-calendar` (structured records), `mcp-wiki` (remote, HTTP, slow).
 - **Namespacing** — `notes.search` vs `wiki.search`. Make the collision happen first, then fix it.
-- Client-side primitives, at least one implemented for real: **roots** (which directories are in
-  scope — this *is* your file-access permission model), **elicitation** (server asks the user
-  mid-tool-call — wire it to a UI prompt in Phase 7), **sampling** (server asks the client for a
-  completion — implement or stub deliberately, and know why it is a trust decision).
+- **Elicitation**, implemented for real (server asks the user mid-tool-call via the `input_required` /
+  retry pattern — wire it to a UI prompt in Phase 7). Roots and sampling are deprecated as of
+  2026-07-28 — know why (migration paths: pass paths via tool params/config; call the LLM provider
+  API directly) rather than building against a feature on its way out.
 
 **Read but do not build:** the OAuth 2.1 flow for remote servers — resource indicators (RFC 8707),
 the MCP server as resource server, and why token passthrough is an anti-pattern. Mock a bearer token
 in `mcp-wiki` and write down what a real implementation would add.
 
 **Answers:** *"Walk me through your MCP server design."* · *"stdio or HTTP, and when?"* ·
-*"What are sampling, roots and elicitation for?"*
+*"What are sampling, roots and elicitation for?"* — and now also *"why did you build it stateless,
+and what changed in the spec?"*
 
 **Done when:** all three servers are reachable through one client, tool names are namespaced, and
 killing a server process mid-call surfaces a typed error instead of a hang.
