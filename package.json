@@ -5,7 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@11.22.0",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "pnpm -r --if-present run typecheck"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
