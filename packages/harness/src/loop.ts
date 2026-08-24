@@ -40,6 +40,11 @@ const DEFAULT_MODEL = "claude-opus-5";
 const DEFAULT_MAX_TURNS = 8;
 const DEFAULT_MAX_TOKENS = 64000;
 
+interface ToolOutcome {
+  event: AgentEvent;
+  toolResult: Anthropic.ToolResultBlockParam;
+}
+
 export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentEvent> {
   const {
     client,
@@ -110,45 +115,72 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const call of toolUseBlocks) {
       yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: call.name, input: call.input };
-      const startedAt = Date.now();
+    }
 
+    const outcomes = createChannel<ToolOutcome>();
+    const tasks = toolUseBlocks.map(async (call) => {
+      const startedAt = Date.now();
       try {
         const result = await registry.execute(call.name, call.input);
-        yield {
-          type: "tool.finished",
-          runId,
-          ts: Date.now(),
-          toolCallId: call.id,
-          name: call.name,
-          result,
-          durationMs: Date.now() - startedAt,
-        };
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: call.id,
-          content: typeof result === "string" ? result : JSON.stringify(result),
+        outcomes.push({
+          event: {
+            type: "tool.finished",
+            runId,
+            ts: Date.now(),
+            toolCallId: call.id,
+            name: call.name,
+            result,
+            durationMs: Date.now() - startedAt,
+          },
+          toolResult: {
+            type: "tool_result",
+            tool_use_id: call.id,
+            content: typeof result === "string" ? result : JSON.stringify(result),
+          },
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        yield {
-          type: "tool.failed",
-          runId,
-          ts: Date.now(),
-          toolCallId: call.id,
-          name: call.name,
-          error: errorMessage,
-        };
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: call.id,
-          content: errorMessage,
-          is_error: true,
+        outcomes.push({
+          event: {
+            type: "tool.failed",
+            runId,
+            ts: Date.now(),
+            toolCallId: call.id,
+            name: call.name,
+            error: errorMessage,
+          },
+          toolResult: {
+            type: "tool_result",
+            tool_use_id: call.id,
+            content: errorMessage,
+            is_error: true,
+          },
         });
       }
+    });
+
+    // Every task pushes exactly one outcome (success or caught failure), so
+    // closing the channel once all settle is safe — nothing is ever dropped.
+    void Promise.allSettled(tasks).then(() => outcomes.close());
+
+    const toolResultsById = new Map<string, Anthropic.ToolResultBlockParam>();
+    for await (const outcome of outcomes) {
+      yield outcome.event;
+      toolResultsById.set(outcome.toolResult.tool_use_id, outcome.toolResult);
     }
+
+    // Re-order to match the original call order for a deterministic transcript —
+    // tool_result blocks are matched to tool_use by id, not position, so this is
+    // cosmetic, not an API requirement.
+    const toolResults = toolUseBlocks.map((call) => {
+      const result = toolResultsById.get(call.id);
+      if (!result) {
+        throw new Error(`Missing tool result for call ${call.id} — this is a bug in runAgent.`);
+      }
+      return result;
+    });
 
     messages.push({ role: "user", content: toolResults });
   }

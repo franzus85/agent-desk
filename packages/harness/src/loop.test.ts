@@ -57,6 +57,21 @@ function toolUseTurn(id: string, name: string): FakeTurn {
   };
 }
 
+function multiToolUseTurn(calls: Array<{ id: string; name: string }>): FakeTurn {
+  return {
+    message: {
+      content: calls.map((call) => ({
+        type: "tool_use",
+        id: call.id,
+        name: call.name,
+        input: {},
+        caller: { type: "direct" },
+      })),
+      stop_reason: "tool_use",
+    },
+  };
+}
+
 const endTurn: FakeTurn = {
   deltas: ["done"],
   message: {
@@ -154,5 +169,64 @@ describe("runAgent", () => {
 
     expect(events.at(-1)).toMatchObject({ type: "run.finished", stopReason: "turn_budget" });
     expect(state.calls).toBe(2);
+  });
+
+  it("runs tools in one turn concurrently and reports completions as they happen", async () => {
+    const registry = new ToolRegistry();
+    registry.register(
+      defineTool({
+        name: "slow",
+        description: "Resolves after a delay",
+        inputSchema: z.object({}),
+        handler: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return "slow-result";
+        },
+      }),
+    );
+    registry.register(
+      defineTool({
+        name: "fast",
+        description: "Resolves immediately",
+        inputSchema: z.object({}),
+        handler: async () => "fast-result",
+      }),
+    );
+
+    const { client, state } = createFakeClient([
+      // "slow" is declared first, "fast" second — completion order should invert.
+      multiToolUseTurn([
+        { id: "call_1", name: "slow" },
+        { id: "call_2", name: "fast" },
+      ]),
+      endTurn,
+    ]);
+
+    const events = await collect(
+      runAgent({ client, registry, task: "run both", runId: "run-4" }),
+    );
+
+    const started = events.filter((e) => e.type === "tool.started");
+    const finished = events.filter((e) => e.type === "tool.finished");
+
+    // Both start before either finishes — proves they ran concurrently, not sequentially.
+    expect(started.map((e) => (e.type === "tool.started" ? e.name : undefined))).toEqual([
+      "slow",
+      "fast",
+    ]);
+    expect(finished.map((e) => (e.type === "tool.finished" ? e.name : undefined))).toEqual([
+      "fast",
+      "slow",
+    ]);
+
+    // The tool_result message sent back to the API restores original call order.
+    const toolResultMessage = state.streamCalls[1]?.messages.at(-1);
+    expect(toolResultMessage).toMatchObject({
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: "call_1" },
+        { type: "tool_result", tool_use_id: "call_2" },
+      ],
+    });
   });
 });
