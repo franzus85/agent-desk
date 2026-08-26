@@ -4,7 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { initTracing } from "@agent-desk/telemetry";
+import { initTracing, shutdownTracing } from "@agent-desk/telemetry";
 import { z } from "zod";
 import { defineTool } from "./tool.js";
 import { ToolRegistry } from "./registry.js";
@@ -65,3 +65,5 @@ await renderToConsole(
     thinking: null,
   }),
 );
+
+await shutdownTracing();

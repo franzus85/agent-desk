@@ -4,14 +4,13 @@ import { BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor, type Span
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
-let initialized = false;
+let provider: NodeTracerProvider | undefined;
 
 // Console exporter is always on (zero-config, "done when" for Phase 4 is a
 // readable trace in the terminal). An OTLP exporter — e.g. to a local
 // Phoenix instance — is added only if OTEL_EXPORTER_OTLP_ENDPOINT is set.
 export function initTracing(serviceName = "agent-desk"): void {
-  if (initialized) return;
-  initialized = true;
+  if (provider) return;
 
   const spanProcessors: SpanProcessor[] = [new SimpleSpanProcessor(new ConsoleSpanExporter())];
 
@@ -20,7 +19,7 @@ export function initTracing(serviceName = "agent-desk"): void {
     spanProcessors.push(new BatchSpanProcessor(new OTLPTraceExporter({ url: `${otlpEndpoint}/v1/traces` })));
   }
 
-  const provider = new NodeTracerProvider({
+  provider = new NodeTracerProvider({
     resource: resourceFromAttributes({ "service.name": serviceName }),
     spanProcessors,
   });
@@ -29,4 +28,12 @@ export function initTracing(serviceName = "agent-desk"): void {
 
 export function getTracer(): Tracer {
   return trace.getTracer("@agent-desk/harness");
+}
+
+// BatchSpanProcessor buffers spans and only flushes on its own timer or when
+// the batch fills — a short-lived script (dev-run.ts, bench.ts) can exit
+// before that ever happens, silently dropping every span it queued for an
+// OTLP backend. Call this once the run is done.
+export async function shutdownTracing(): Promise<void> {
+  await provider?.shutdown();
 }

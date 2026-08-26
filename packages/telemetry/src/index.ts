@@ -1,2 +1,2 @@
 export * from "./attributes.js";
-export { getTracer, initTracing } from "./tracing.js";
+export { getTracer, initTracing, shutdownTracing } from "./tracing.js";
