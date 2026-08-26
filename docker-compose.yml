@@ -9,5 +9,21 @@ services:
     volumes:
       - phoenix-data:/mnt/data
 
+  # Alternative backend — Grafana + Tempo + Prometheus + Loki in one image.
+  # Opt-in only (`docker compose --profile grafana up -d`), since running it
+  # alongside phoenix by default would double up on resources for no reason.
+  # Ports are remapped off the defaults (3000, 4317) to avoid colliding with
+  # phoenix's 4317 and other unrelated containers already using 3000.
+  grafana-lgtm:
+    image: grafana/otel-lgtm:latest
+    profiles: ["grafana"]
+    ports:
+      - "3001:3000" # Grafana UI
+      - "4319:4317" # OTLP gRPC collector
+      - "4318:4318" # OTLP HTTP collector (POST /v1/traces)
+    volumes:
+      - grafana-lgtm-data:/data
+
 volumes:
   phoenix-data:
+  grafana-lgtm-data:
