@@ -26,3 +26,4 @@ export type {
   JsonRpcResponse,
   JsonRpcNotification,
 } from "./protocol.js";
+export type { ElicitationPrompt, ElicitationResponse, ElicitationHandler, InputRequestEntry } from "./elicitation.js";

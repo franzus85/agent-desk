@@ -78,4 +78,53 @@ describe("mcp-notes server (real process, real files)", () => {
       code: -32602,
     });
   });
+
+  it("asks for confirmation before overwriting, then completes once accepted", async () => {
+    await client.callTool("write", { title: "sprint-42", body: "first version" });
+
+    const secondWrite = await client.callTool("write", { title: "sprint-42", body: "second version" });
+    expect(secondWrite.status).toBe("input_required");
+    if (secondWrite.status !== "input_required") throw new Error("unreachable");
+    const inputRequests = secondWrite.inputRequest["inputRequests"] as Record<string, { params: { message: string } }>;
+    expect(inputRequests["confirm"]?.params.message).toContain("sprint-42");
+
+    const seenMessages: string[] = [];
+    const outcome = await client.callToolWithElicitation(
+      "write",
+      { title: "sprint-42", body: "second version" },
+      async (prompt) => {
+        seenMessages.push(prompt.message);
+        return { action: "accept", content: { confirm: true } };
+      },
+    );
+
+    expect(seenMessages).toHaveLength(1);
+    expect(outcome.status).toBe("complete");
+    if (outcome.status !== "complete") throw new Error("unreachable");
+    expect(outcome.result["isError"]).toBe(false);
+
+    const searchOutcome = await client.callTool("search", { query: "second version" });
+    if (searchOutcome.status !== "complete") throw new Error("unreachable");
+    const content = searchOutcome.result["content"] as Array<{ text: string }>;
+    expect(content[0]?.text).toContain("second version");
+  });
+
+  it("does not overwrite when the user declines the confirmation", async () => {
+    await client.callTool("write", { title: "sprint-42", body: "first version" });
+
+    const outcome = await client.callToolWithElicitation(
+      "write",
+      { title: "sprint-42", body: "unwanted overwrite" },
+      async () => ({ action: "decline" }),
+    );
+
+    expect(outcome.status).toBe("complete");
+    if (outcome.status !== "complete") throw new Error("unreachable");
+    expect(outcome.result["isError"]).toBe(true);
+
+    const searchOutcome = await client.callTool("search", { query: "first version" });
+    if (searchOutcome.status !== "complete") throw new Error("unreachable");
+    const content = searchOutcome.result["content"] as Array<{ text: string }>;
+    expect(content[0]?.text).toContain("first version");
+  });
 });

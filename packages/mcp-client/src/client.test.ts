@@ -121,4 +121,73 @@ describe("McpClient", () => {
       params: { name: "notes.search", arguments: { query: "q3" } },
     });
   });
+
+  it("callToolWithElicitation resolves input_required via the elicit callback and retries", async () => {
+    let calls = 0;
+    const { transport, received } = createFakeTransport((message) => {
+      calls++;
+      if (calls === 1) {
+        return {
+          jsonrpc: "2.0",
+          id: message.id,
+          result: {
+            resultType: "input_required",
+            inputRequests: {
+              confirm: {
+                method: "elicitation/create",
+                params: { mode: "form", message: "Overwrite?", requestedSchema: { type: "object" } },
+              },
+            },
+            requestState: "opaque-state",
+          },
+        };
+      }
+      return { jsonrpc: "2.0", id: message.id, result: { resultType: "complete", content: [] } };
+    });
+
+    const client = new McpClient({ transport });
+    const seenPrompts: string[] = [];
+    const outcome = await client.callToolWithElicitation("write", { title: "x" }, async (prompt) => {
+      seenPrompts.push(prompt.message);
+      return { action: "accept", content: { confirm: true } };
+    });
+
+    expect(seenPrompts).toEqual(["Overwrite?"]);
+    expect(outcome).toEqual({ status: "complete", result: { resultType: "complete", content: [] } });
+    expect(received[1]?.params).toMatchObject({
+      name: "write",
+      arguments: { title: "x" },
+      inputResponses: { confirm: { action: "accept", content: { confirm: true } } },
+      requestState: "opaque-state",
+    });
+  });
+
+  it("callToolWithElicitation gives up after maxRounds instead of looping forever", async () => {
+    const { transport } = createFakeTransport((message) => ({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        resultType: "input_required",
+        inputRequests: {
+          confirm: { method: "elicitation/create", params: { message: "Again?", requestedSchema: {} } },
+        },
+        requestState: "still-not-done",
+      },
+    }));
+
+    const client = new McpClient({ transport });
+    let elicitCalls = 0;
+    const outcome = await client.callToolWithElicitation(
+      "write",
+      { title: "x" },
+      async () => {
+        elicitCalls++;
+        return { action: "accept", content: {} };
+      },
+      2,
+    );
+
+    expect(elicitCalls).toBe(2);
+    expect(outcome.status).toBe("input_required");
+  });
 });

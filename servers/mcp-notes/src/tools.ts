@@ -1,8 +1,8 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { defineTool, ToolRegistry } from "@agent-desk/harness";
+import { defineTool, ElicitationRequired, ToolRegistry } from "@agent-desk/harness";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Overridable so tests can point at an isolated temp dir instead of mutating
@@ -23,6 +23,15 @@ async function listNoteFiles(): Promise<string[]> {
   await ensureDataDir();
   const entries = await readdir(DATA_DIR);
   return entries.filter((entry) => entry.endsWith(".md"));
+}
+
+async function noteExists(title: string): Promise<boolean> {
+  try {
+    await access(notePath(title));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const registry = new ToolRegistry();
@@ -62,12 +71,24 @@ registry.register(
 registry.register(
   defineTool({
     name: "write",
-    description: "Writes a note under the given title, overwriting any existing note with that title.",
-    inputSchema: z.object({ title: z.string(), body: z.string() }),
-    handler: async ({ title, body }) => {
+    description: "Writes a note under the given title. Asks for confirmation before overwriting an existing note.",
+    inputSchema: z.object({
+      title: z.string(),
+      body: z.string(),
+      confirmOverwrite: z.boolean().optional(),
+    }),
+    handler: async ({ title, body, confirmOverwrite }) => {
+      const exists = await noteExists(title);
+      if (exists && !confirmOverwrite) {
+        throw new ElicitationRequired(`A note titled "${title}" already exists. Overwrite it?`, {
+          type: "object",
+          properties: { confirm: { type: "boolean" } },
+          required: ["confirm"],
+        });
+      }
       await ensureDataDir();
       await writeFile(notePath(title), body, "utf8");
-      return { saved: title };
+      return { saved: title, overwritten: exists };
     },
   }),
 );

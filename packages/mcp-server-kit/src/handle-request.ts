@@ -1,5 +1,23 @@
 import type { JsonRpcRequest } from "@agent-desk/mcp-client";
-import { ToolNotFoundError, type ToolRegistry } from "@agent-desk/harness";
+import { ElicitationRequired, ToolNotFoundError, type ToolRegistry } from "@agent-desk/harness";
+
+interface PendingCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+function encodeRequestState(pending: PendingCall): string {
+  return Buffer.from(JSON.stringify(pending), "utf8").toString("base64");
+}
+
+function decodeRequestState(requestState: string): PendingCall {
+  return JSON.parse(Buffer.from(requestState, "base64").toString("utf8")) as PendingCall;
+}
+
+interface InputResponse {
+  action: "accept" | "decline" | "cancel";
+  content?: Record<string, unknown>;
+}
 
 // Shared by every MCP server we write: given a parsed, already-validated
 // JsonRpcRequest and the tool registry backing it, produce the JSON-RPC
@@ -23,8 +41,35 @@ export async function handleMcpRequest(request: JsonRpcRequest, registry: ToolRe
 
   if (request.method === "tools/call") {
     const params = request.params ?? {};
-    const name = params["name"];
-    const args = (params["arguments"] ?? {}) as Record<string, unknown>;
+    const inputResponses = params["inputResponses"] as Record<string, InputResponse> | undefined;
+    const requestState = params["requestState"];
+
+    let name: unknown;
+    let args: Record<string, unknown>;
+
+    if (inputResponses && typeof requestState === "string") {
+      // Resuming a call that previously asked for input — requestState is
+      // the source of truth for what we were doing (MCP has no session, so
+      // this is the only place that context can live between requests).
+      const pending = decodeRequestState(requestState);
+      name = pending.name;
+      const confirmResponse = inputResponses["confirm"];
+      if (confirmResponse?.action !== "accept") {
+        return {
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            resultType: "complete",
+            content: [{ type: "text", text: "User declined the requested confirmation." }],
+            isError: true,
+          },
+        };
+      }
+      args = { ...pending.arguments, confirmOverwrite: confirmResponse.content?.["confirm"] ?? true };
+    } else {
+      name = params["name"];
+      args = (params["arguments"] ?? {}) as Record<string, unknown>;
+    }
 
     if (typeof name !== "string") {
       return {
@@ -46,6 +91,22 @@ export async function handleMcpRequest(request: JsonRpcRequest, registry: ToolRe
         },
       };
     } catch (error) {
+      if (error instanceof ElicitationRequired) {
+        return {
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            resultType: "input_required",
+            inputRequests: {
+              confirm: {
+                method: "elicitation/create",
+                params: { mode: "form", message: error.message, requestedSchema: error.requestedSchema },
+              },
+            },
+            requestState: encodeRequestState({ name, arguments: args }),
+          },
+        };
+      }
       // Unknown tool is a protocol-structural problem (JSON-RPC error, like the
       // spec's own "Unknown tool" example); anything else — bad input, a
       // handler failure — is a tool execution error the model can act on.

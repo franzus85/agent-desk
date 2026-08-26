@@ -14,3 +14,4 @@ export { renderToConsole, formatEvent } from "./console-renderer.js";
 export type { RenderOptions } from "./console-renderer.js";
 export { registerMcpServer, registerMcpServers } from "./mcp-bridge.js";
 export type { McpServerConnection } from "./mcp-bridge.js";
+export { ElicitationRequired } from "./elicitation.js";

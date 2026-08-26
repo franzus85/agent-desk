@@ -2,6 +2,9 @@ import { MCP_PROTOCOL_VERSION, jsonRpcResponseSchema } from "./protocol.js";
 import type { JsonRpcRequest } from "./protocol.js";
 import type { McpTransport } from "./transport.js";
 import { McpError, McpErrorCode, toMcpError } from "./errors.js";
+import type { ElicitationHandler, ElicitationResponse, InputRequestEntry } from "./elicitation.js";
+
+const MAX_ELICITATION_ROUNDS = 3;
 
 export interface McpClientOptions {
   transport: McpTransport;
@@ -65,5 +68,34 @@ export class McpClient {
 
   callTool(name: string, args: Record<string, unknown> = {}): Promise<McpCallResult> {
     return this.request("tools/call", { name, arguments: args });
+  }
+
+  // Drives the MRTR retry loop automatically: on input_required, calls
+  // `elicit` for each requested field and retries the same tools/call with
+  // inputResponses + requestState until the server is satisfied or
+  // maxRounds is hit (a server that keeps asking forever is a bug, not
+  // something to loop on indefinitely — mirrors the repeat-detection
+  // philosophy from the agent loop).
+  async callToolWithElicitation(
+    name: string,
+    args: Record<string, unknown>,
+    elicit: ElicitationHandler,
+    maxRounds = MAX_ELICITATION_ROUNDS,
+  ): Promise<McpCallResult> {
+    let outcome = await this.callTool(name, args);
+
+    for (let round = 0; outcome.status === "input_required" && round < maxRounds; round++) {
+      const inputRequests = outcome.inputRequest["inputRequests"] as Record<string, InputRequestEntry> | undefined;
+      const requestState = outcome.inputRequest["requestState"];
+
+      const inputResponses: Record<string, ElicitationResponse> = {};
+      for (const [key, entry] of Object.entries(inputRequests ?? {})) {
+        inputResponses[key] = await elicit({ message: entry.params.message, requestedSchema: entry.params.requestedSchema });
+      }
+
+      outcome = await this.request("tools/call", { name, arguments: args, inputResponses, requestState });
+    }
+
+    return outcome;
   }
 }
