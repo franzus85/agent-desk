@@ -35,7 +35,7 @@ export function fromApiToolName(apiToolName: string): string {
 // Selection is scored on tool *name* only — none of these skills are
 // actually invoked — so every tool gets the same permissive placeholder
 // schema instead of a real one.
-const PLACEHOLDER_INPUT_SCHEMA: Anthropic.Tool.InputSchema = { type: "object", properties: {}, additionalProperties: true };
+export const PLACEHOLDER_INPUT_SCHEMA: Anthropic.Tool.InputSchema = { type: "object", properties: {}, additionalProperties: true };
 
 function toolsFromSkills(skills: SyntheticSkillSpec[]): Anthropic.Tool[] {
   return skills.map((skill) => ({

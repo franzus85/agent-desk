@@ -12,6 +12,12 @@ import { naiveStrategy } from "./strategies/naive.js";
 import { tier1KeywordStrategy } from "./strategies/tier1-keyword.js";
 import { tier2EmbeddingStrategy } from "./strategies/tier2-embedding.js";
 import { tier3ProgressiveStrategy } from "./strategies/tier3-progressive.js";
+import {
+  tier4ToolSearchBm25AutoStrategy,
+  tier4ToolSearchBm25Strategy,
+  tier4ToolSearchRegexAutoStrategy,
+  tier4ToolSearchRegexStrategy,
+} from "./strategies/tier4-tool-search.js";
 import type { SelectionStrategy } from "./strategies/types.js";
 import { selectionTasks } from "./tasks.js";
 
@@ -88,7 +94,22 @@ async function runStrategy(client: Anthropic, strategy: SelectionStrategy): Prom
 }
 
 const client = new Anthropic();
-const strategies: SelectionStrategy[] = [naiveStrategy, tier1KeywordStrategy, tier2EmbeddingStrategy, tier3ProgressiveStrategy];
+const allStrategies: SelectionStrategy[] = [
+  naiveStrategy,
+  tier1KeywordStrategy,
+  tier2EmbeddingStrategy,
+  tier3ProgressiveStrategy,
+  tier4ToolSearchBm25Strategy,
+  tier4ToolSearchRegexStrategy,
+  tier4ToolSearchBm25AutoStrategy,
+  tier4ToolSearchRegexAutoStrategy,
+];
+
+// Optional substring filters, e.g. `pnpm bench -- tier4` to re-run only the
+// tool-search variants instead of paying for the whole suite again.
+const filters = process.argv.slice(2);
+const strategies =
+  filters.length === 0 ? allStrategies : allStrategies.filter((strategy) => filters.some((filter) => strategy.name.includes(filter)));
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, "..", "..", "bench-reports");
