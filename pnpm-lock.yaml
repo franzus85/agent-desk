@@ -283,6 +283,9 @@ importers:
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
 
   servers/mcp-calendar:
     dependencies:

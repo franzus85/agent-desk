@@ -7,13 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate": "tsx src/synthetic/cli.ts"
   },
   "dependencies": {
     "yaml": "^2.6.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0"
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12"
   }
 }
