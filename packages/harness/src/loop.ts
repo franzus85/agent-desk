@@ -1,5 +1,25 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentEvent } from "@agent-desk/protocol";
+import {
+  ERROR_TYPE,
+  GEN_AI_OPERATION_CHAT,
+  GEN_AI_OPERATION_EXECUTE_TOOL,
+  GEN_AI_OPERATION_INVOKE_AGENT,
+  GEN_AI_OPERATION_NAME,
+  GEN_AI_PROVIDER_ANTHROPIC,
+  GEN_AI_PROVIDER_NAME,
+  GEN_AI_REQUEST_MODEL,
+  GEN_AI_TOOL_CALL_ID,
+  GEN_AI_TOOL_NAME,
+  GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
+  GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
+  GEN_AI_USAGE_INPUT_TOKENS,
+  GEN_AI_USAGE_OUTPUT_TOKENS,
+  getTracer,
+  SKILL_CANDIDATES,
+  SKILL_SELECTED,
+} from "@agent-desk/telemetry";
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import type { ToolRegistry } from "./registry.js";
 import { createChannel } from "./channel.js";
 import { stableStringify } from "./stable-stringify.js";
@@ -7,6 +27,7 @@ import { stableStringify } from "./stable-stringify.js";
 export interface AgentMessage {
   content: Anthropic.ContentBlock[];
   stop_reason: string | null;
+  usage: Anthropic.Usage;
 }
 
 export interface AgentStream {
@@ -79,158 +100,215 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
     repeatLimit = DEFAULT_REPEAT_LIMIT,
   } = options;
 
-  yield { type: "run.started", runId, ts: Date.now(), task };
+  const tracer = getTracer();
+  // One run = one trace: every model-call and tool-call span below is
+  // created as a child of this span via an explicit parent context (not
+  // startActiveSpan's implicit one, since async generators can't yield
+  // across that callback boundary).
+  const rootSpan = tracer.startSpan(GEN_AI_OPERATION_INVOKE_AGENT, {
+    attributes: { [GEN_AI_OPERATION_NAME]: GEN_AI_OPERATION_INVOKE_AGENT },
+  });
+  const rootContext = trace.setSpan(context.active(), rootSpan);
 
-  const tools: Anthropic.Tool[] = registry.specs().map((spec) => ({
-    name: spec.name,
-    description: spec.description,
-    input_schema: spec.inputSchema as Anthropic.Tool["input_schema"],
-  }));
+  try {
+    yield { type: "run.started", runId, ts: Date.now(), task };
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: task }];
-  const callHistory: CallRecord[] = [];
-
-  for (let turn = 0; turn < maxTurns; turn++) {
-    const stream = client.messages.stream({
-      model,
-      max_tokens: maxTokens,
-      thinking: thinking ?? undefined,
-      tools,
-      messages,
-    });
-
-    const channel = createChannel<AgentEvent>();
-    stream.on("text", (delta) => {
-      channel.push({ type: "text.delta", runId, ts: Date.now(), delta });
-    });
-
-    const finalMessagePromise = stream.finalMessage();
-    finalMessagePromise.finally(() => channel.close());
-
-    let message: AgentMessage;
-    try {
-      for await (const event of channel) {
-        yield event;
-      }
-      message = await finalMessagePromise;
-    } catch (error) {
-      yield { type: "run.error", runId, ts: Date.now(), message: String(error) };
-      return;
-    }
-
-    if (message.stop_reason === "end_turn") {
-      yield { type: "run.finished", runId, ts: Date.now(), stopReason: "end_turn" };
-      return;
-    }
-
-    if (message.stop_reason === "pause_turn") {
-      messages.push({ role: "assistant", content: message.content });
-      continue;
-    }
-
-    if (message.stop_reason !== "tool_use") {
-      yield {
-        type: "run.error",
-        runId,
-        ts: Date.now(),
-        message: `Unhandled stop_reason: ${String(message.stop_reason)}`,
-      };
-      return;
-    }
-
-    messages.push({ role: "assistant", content: message.content });
-
-    const toolUseBlocks = message.content.filter(
-      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-    );
-
-    const callsWithSignature = toolUseBlocks.map((call) => ({
-      call,
-      argsSignature: stableStringify(call.input),
+    const tools: Anthropic.Tool[] = registry.specs().map((spec) => ({
+      name: spec.name,
+      description: spec.description,
+      input_schema: spec.inputSchema as Anthropic.Tool["input_schema"],
     }));
 
-    const wouldRepeat = callsWithSignature.some(({ call, argsSignature }) =>
-      completesRepeat(callHistory, call.name, argsSignature, repeatLimit),
-    );
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: task }];
+    const callHistory: CallRecord[] = [];
 
-    if (wouldRepeat) {
-      yield { type: "run.finished", runId, ts: Date.now(), stopReason: "repeat_detected" };
-      return;
-    }
+    for (let turn = 0; turn < maxTurns; turn++) {
+      const chatSpan = tracer.startSpan(
+        `${GEN_AI_OPERATION_CHAT} ${model}`,
+        {
+          attributes: {
+            [GEN_AI_OPERATION_NAME]: GEN_AI_OPERATION_CHAT,
+            [GEN_AI_PROVIDER_NAME]: GEN_AI_PROVIDER_ANTHROPIC,
+            [GEN_AI_REQUEST_MODEL]: model,
+            [SKILL_CANDIDATES]: tools.length,
+          },
+        },
+        rootContext,
+      );
 
-    for (const { call, argsSignature } of callsWithSignature) {
-      callHistory.push({ name: call.name, argsSignature });
-    }
+      const stream = client.messages.stream({
+        model,
+        max_tokens: maxTokens,
+        thinking: thinking ?? undefined,
+        tools,
+        messages,
+      });
 
-    for (const call of toolUseBlocks) {
-      yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: call.name, input: call.input };
-    }
+      const channel = createChannel<AgentEvent>();
+      stream.on("text", (delta) => {
+        channel.push({ type: "text.delta", runId, ts: Date.now(), delta });
+      });
 
-    const outcomes = createChannel<ToolOutcome>();
-    const tasks = toolUseBlocks.map(async (call) => {
-      const startedAt = Date.now();
+      const finalMessagePromise = stream.finalMessage();
+      finalMessagePromise.finally(() => channel.close());
+
+      let message: AgentMessage;
       try {
-        const result = await registry.execute(call.name, call.input);
-        outcomes.push({
-          event: {
-            type: "tool.finished",
-            runId,
-            ts: Date.now(),
-            toolCallId: call.id,
-            name: call.name,
-            result,
-            durationMs: Date.now() - startedAt,
-          },
-          toolResult: {
-            type: "tool_result",
-            tool_use_id: call.id,
-            content: typeof result === "string" ? result : JSON.stringify(result),
-          },
-        });
+        for await (const event of channel) {
+          yield event;
+        }
+        message = await finalMessagePromise;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        outcomes.push({
-          event: {
-            type: "tool.failed",
-            runId,
-            ts: Date.now(),
-            toolCallId: call.id,
-            name: call.name,
-            error: errorMessage,
-          },
-          toolResult: {
-            type: "tool_result",
-            tool_use_id: call.id,
-            content: errorMessage,
-            is_error: true,
-          },
-        });
+        chatSpan.recordException(error instanceof Error ? error : String(error));
+        chatSpan.setStatus({ code: SpanStatusCode.ERROR, message: String(error) });
+        chatSpan.end();
+        yield { type: "run.error", runId, ts: Date.now(), message: String(error) };
+        return;
       }
-    });
 
-    // Every task pushes exactly one outcome (success or caught failure), so
-    // closing the channel once all settle is safe — nothing is ever dropped.
-    void Promise.allSettled(tasks).then(() => outcomes.close());
+      chatSpan.setAttribute(GEN_AI_USAGE_INPUT_TOKENS, message.usage.input_tokens);
+      chatSpan.setAttribute(GEN_AI_USAGE_OUTPUT_TOKENS, message.usage.output_tokens);
+      if (message.usage.cache_read_input_tokens != null) {
+        chatSpan.setAttribute(GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS, message.usage.cache_read_input_tokens);
+      }
+      if (message.usage.cache_creation_input_tokens != null) {
+        chatSpan.setAttribute(GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS, message.usage.cache_creation_input_tokens);
+      }
 
-    const toolResultsById = new Map<string, Anthropic.ToolResultBlockParam>();
-    for await (const outcome of outcomes) {
-      yield outcome.event;
-      toolResultsById.set(outcome.toolResult.tool_use_id, outcome.toolResult);
+      const toolUseBlocks = message.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+      if (toolUseBlocks.length > 0) {
+        chatSpan.setAttribute(SKILL_SELECTED, toolUseBlocks.map((call) => call.name).join(","));
+      }
+      chatSpan.end();
+
+      if (message.stop_reason === "end_turn") {
+        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "end_turn" };
+        return;
+      }
+
+      if (message.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: message.content });
+        continue;
+      }
+
+      if (message.stop_reason !== "tool_use") {
+        yield {
+          type: "run.error",
+          runId,
+          ts: Date.now(),
+          message: `Unhandled stop_reason: ${String(message.stop_reason)}`,
+        };
+        return;
+      }
+
+      messages.push({ role: "assistant", content: message.content });
+
+      const callsWithSignature = toolUseBlocks.map((call) => ({
+        call,
+        argsSignature: stableStringify(call.input),
+      }));
+
+      const wouldRepeat = callsWithSignature.some(({ call, argsSignature }) =>
+        completesRepeat(callHistory, call.name, argsSignature, repeatLimit),
+      );
+
+      if (wouldRepeat) {
+        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "repeat_detected" };
+        return;
+      }
+
+      for (const { call, argsSignature } of callsWithSignature) {
+        callHistory.push({ name: call.name, argsSignature });
+      }
+
+      for (const call of toolUseBlocks) {
+        yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: call.name, input: call.input };
+      }
+
+      const outcomes = createChannel<ToolOutcome>();
+      const tasks = toolUseBlocks.map(async (call) => {
+        const toolSpan = tracer.startSpan(
+          `${GEN_AI_OPERATION_EXECUTE_TOOL} ${call.name}`,
+          {
+            attributes: {
+              [GEN_AI_OPERATION_NAME]: GEN_AI_OPERATION_EXECUTE_TOOL,
+              [GEN_AI_TOOL_NAME]: call.name,
+              [GEN_AI_TOOL_CALL_ID]: call.id,
+            },
+          },
+          rootContext,
+        );
+        const startedAt = Date.now();
+        try {
+          const result = await registry.execute(call.name, call.input);
+          toolSpan.end();
+          outcomes.push({
+            event: {
+              type: "tool.finished",
+              runId,
+              ts: Date.now(),
+              toolCallId: call.id,
+              name: call.name,
+              result,
+              durationMs: Date.now() - startedAt,
+            },
+            toolResult: {
+              type: "tool_result",
+              tool_use_id: call.id,
+              content: typeof result === "string" ? result : JSON.stringify(result),
+            },
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          toolSpan.recordException(error instanceof Error ? error : errorMessage);
+          toolSpan.setAttribute(ERROR_TYPE, error instanceof Error ? error.constructor.name : "UnknownError");
+          toolSpan.setStatus({ code: SpanStatusCode.ERROR, message: errorMessage });
+          toolSpan.end();
+          outcomes.push({
+            event: {
+              type: "tool.failed",
+              runId,
+              ts: Date.now(),
+              toolCallId: call.id,
+              name: call.name,
+              error: errorMessage,
+            },
+            toolResult: {
+              type: "tool_result",
+              tool_use_id: call.id,
+              content: errorMessage,
+              is_error: true,
+            },
+          });
+        }
+      });
+
+      // Every task pushes exactly one outcome (success or caught failure), so
+      // closing the channel once all settle is safe — nothing is ever dropped.
+      void Promise.allSettled(tasks).then(() => outcomes.close());
+
+      const toolResultsById = new Map<string, Anthropic.ToolResultBlockParam>();
+      for await (const outcome of outcomes) {
+        yield outcome.event;
+        toolResultsById.set(outcome.toolResult.tool_use_id, outcome.toolResult);
+      }
+
+      // Re-order to match the original call order for a deterministic transcript —
+      // tool_result blocks are matched to tool_use by id, not position, so this is
+      // cosmetic, not an API requirement.
+      const toolResults = toolUseBlocks.map((call) => {
+        const result = toolResultsById.get(call.id);
+        if (!result) {
+          throw new Error(`Missing tool result for call ${call.id} — this is a bug in runAgent.`);
+        }
+        return result;
+      });
+
+      messages.push({ role: "user", content: toolResults });
     }
 
-    // Re-order to match the original call order for a deterministic transcript —
-    // tool_result blocks are matched to tool_use by id, not position, so this is
-    // cosmetic, not an API requirement.
-    const toolResults = toolUseBlocks.map((call) => {
-      const result = toolResultsById.get(call.id);
-      if (!result) {
-        throw new Error(`Missing tool result for call ${call.id} — this is a bug in runAgent.`);
-      }
-      return result;
-    });
-
-    messages.push({ role: "user", content: toolResults });
+    yield { type: "run.finished", runId, ts: Date.now(), stopReason: "turn_budget" };
+  } finally {
+    rootSpan.end();
   }
-
-  yield { type: "run.finished", runId, ts: Date.now(), stopReason: "turn_budget" };
 }

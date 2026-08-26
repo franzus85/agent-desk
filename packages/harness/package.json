@@ -13,7 +13,9 @@
   "dependencies": {
     "@agent-desk/mcp-client": "workspace:*",
     "@agent-desk/protocol": "workspace:*",
+    "@agent-desk/telemetry": "workspace:*",
     "@anthropic-ai/sdk": "^0.120.0",
+    "@opentelemetry/api": "^1.9.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

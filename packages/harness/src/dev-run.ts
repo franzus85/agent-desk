@@ -4,11 +4,14 @@
 
 import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { initTracing } from "@agent-desk/telemetry";
 import { z } from "zod";
 import { defineTool } from "./tool.js";
 import { ToolRegistry } from "./registry.js";
 import { runAgent } from "./loop.js";
 import { renderToConsole } from "./console-renderer.js";
+
+initTracing();
 
 const notes = new Map<string, string>([
   ["q3-plan", "Q3 focus: ship the MCP client and the eval harness."],

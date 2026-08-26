@@ -322,10 +322,22 @@ the same task set.
 
 ### Phase 4 — Telemetry · ~1.5 h
 
+> **Amendment, 2026-08-26 (discovered while building this phase):** the OTel GenAI semantic
+> conventions moved to their own repo (`open-telemetry/semantic-conventions-genai`) and renamed
+> `gen_ai.system` → **`gen_ai.provider.name`** after this PRD was written. Tool-call spans also
+> gained real, spec-defined attributes in the meantime: `gen_ai.operation.name: "execute_tool"`,
+> `gen_ai.tool.name`, `gen_ai.tool.call.id` — so the originally-planned custom `tool.error_class`
+> is replaced by the standard (and spec-stable) `error.type`. Cache-token attributes also split into
+> `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_write.input_tokens` (the latter
+> maps to Anthropic's own `cache_creation_input_tokens` field — different name, same thing). The
+> bullets below use the current names; `skill.selected`/`skill.candidates` stay as originally
+> planned since they're project-specific, not part of the spec.
+
 **Build:** OTel tracing with GenAI semantic conventions — one span per model call and per tool call,
-carrying `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`,
-`gen_ai.usage.output_tokens`, plus your own `skill.selected`, `skill.candidates`, `tool.error_class`.
-One run = one trace. Export to console plus a local Langfuse or Phoenix in Docker.
+carrying `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`,
+`gen_ai.usage.output_tokens`, plus your own `skill.selected`, `skill.candidates`, and the standard
+`error.type` on failed tool spans. One run = one trace. Export to console plus a local Langfuse or
+Phoenix in Docker.
 
 **Also track prompt-cache effectiveness.** Order is `tools` → `system` → `messages`; any byte change
 in the prefix invalidates everything after it. Watch `usage.cache_read_input_tokens` — if it is zero

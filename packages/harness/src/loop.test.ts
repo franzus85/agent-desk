@@ -11,6 +11,18 @@ interface FakeTurn {
   message: AgentMessage;
 }
 
+const FAKE_USAGE: Anthropic.Usage = {
+  input_tokens: 10,
+  output_tokens: 5,
+  cache_creation: null,
+  cache_creation_input_tokens: null,
+  cache_read_input_tokens: null,
+  inference_geo: null,
+  output_tokens_details: null,
+  server_tool_use: null,
+  service_tier: null,
+};
+
 interface StreamCall {
   messages: Anthropic.MessageParam[];
 }
@@ -53,6 +65,7 @@ function toolUseTurn(id: string, name: string): FakeTurn {
     message: {
       content: [{ type: "tool_use", id, name, input: {}, caller: { type: "direct" } }],
       stop_reason: "tool_use",
+      usage: FAKE_USAGE,
     },
   };
 }
@@ -68,6 +81,7 @@ function multiToolUseTurn(calls: Array<{ id: string; name: string }>): FakeTurn 
         caller: { type: "direct" },
       })),
       stop_reason: "tool_use",
+      usage: FAKE_USAGE,
     },
   };
 }
@@ -77,6 +91,7 @@ const endTurn: FakeTurn = {
   message: {
     content: [{ type: "text", text: "done", citations: null }],
     stop_reason: "end_turn",
+    usage: FAKE_USAGE,
   },
 };
 
@@ -248,6 +263,7 @@ describe("runAgent", () => {
             { type: "tool_use", id, name: "search", input: { query: "q3" }, caller: { type: "direct" } },
           ],
           stop_reason: "tool_use",
+          usage: FAKE_USAGE,
         },
       };
     }
