@@ -25,6 +25,7 @@ const FAKE_USAGE: Anthropic.Usage = {
 
 interface StreamCall {
   messages: Anthropic.MessageParam[];
+  tools: Anthropic.Tool[] | undefined;
 }
 
 function createFakeClient(turns: FakeTurn[]) {
@@ -32,7 +33,7 @@ function createFakeClient(turns: FakeTurn[]) {
   const client: AgentClient = {
     messages: {
       stream(params) {
-        state.streamCalls.push({ messages: params.messages });
+        state.streamCalls.push({ messages: params.messages, tools: params.tools });
         const turn = turns[state.calls];
         state.calls += 1;
         if (!turn) {
@@ -128,6 +129,34 @@ describe("runAgent", () => {
     const last = events.at(-1);
     expect(last).toMatchObject({ type: "run.finished", stopReason: "end_turn" });
     expect(state.calls).toBe(4);
+  });
+
+  it("sanitizes dotted (namespaced) tool names for the API and maps them back for execution/events", async () => {
+    const registry = new ToolRegistry();
+    registry.register(
+      defineTool({
+        name: "notes.search",
+        description: "Searches notes",
+        inputSchema: z.object({}),
+        handler: async () => ({ ok: true }),
+      }),
+    );
+
+    // The fake client stands in for the real Anthropic API, which only ever
+    // knows the sanitized name — so the scripted tool_use response uses it,
+    // exactly like a real response would.
+    const { client, state } = createFakeClient([toolUseTurn("call_1", "notes__search"), endTurn]);
+
+    const events = await collect(runAgent({ client, registry, task: "find q3 notes", runId: "run-1" }));
+
+    // Anthropic's tool.name pattern forbids dots — the API-facing request
+    // must never see "notes.search" directly.
+    expect(state.streamCalls[0]?.tools?.map((tool) => tool.name)).toEqual(["notes__search"]);
+
+    // But everything this module owns — execution, events — must see the
+    // real, dotted registry name.
+    const finished = events.find((e) => e.type === "tool.finished");
+    expect(finished).toMatchObject({ name: "notes.search" });
   });
 
   it("reports a failing tool without ending the run", async () => {

@@ -76,6 +76,20 @@ interface CallRecord {
   argsSignature: string;
 }
 
+// Anthropic's tool.name must match ^[a-zA-Z0-9_-]{1,128}$ — no dots — but the
+// registry namespaces tools as "server.toolName" (see mcp-bridge.ts). The API
+// only ever sees the sanitized form; call.name on returned tool_use blocks is
+// mapped back to the real registry name before we execute or report on it.
+// message.content itself is never rewritten — it's replayed to the API
+// verbatim next turn, so it must stay in the API's own vocabulary.
+function toApiToolName(name: string): string {
+  return name.replace(/\./g, "__");
+}
+
+function fromApiToolName(apiName: string): string {
+  return apiName.replace(/__/g, ".");
+}
+
 // True if issuing this call would complete `limit` identical calls in a row.
 // Only the last (limit - 1) history entries matter — anything older is
 // irrelevant to "N times consecutively".
@@ -114,7 +128,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
     yield { type: "run.started", runId, ts: Date.now(), task };
 
     const tools: Anthropic.Tool[] = registry.specs().map((spec) => ({
-      name: spec.name,
+      name: toApiToolName(spec.name),
       description: spec.description,
       input_schema: spec.inputSchema as Anthropic.Tool["input_schema"],
     }));
@@ -177,7 +191,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
 
       const toolUseBlocks = message.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
       if (toolUseBlocks.length > 0) {
-        chatSpan.setAttribute(SKILL_SELECTED, toolUseBlocks.map((call) => call.name).join(","));
+        chatSpan.setAttribute(SKILL_SELECTED, toolUseBlocks.map((call) => fromApiToolName(call.name)).join(","));
       }
       chatSpan.end();
 
@@ -205,11 +219,12 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
 
       const callsWithSignature = toolUseBlocks.map((call) => ({
         call,
+        realName: fromApiToolName(call.name),
         argsSignature: stableStringify(call.input),
       }));
 
-      const wouldRepeat = callsWithSignature.some(({ call, argsSignature }) =>
-        completesRepeat(callHistory, call.name, argsSignature, repeatLimit),
+      const wouldRepeat = callsWithSignature.some(({ realName, argsSignature }) =>
+        completesRepeat(callHistory, realName, argsSignature, repeatLimit),
       );
 
       if (wouldRepeat) {
@@ -217,22 +232,22 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
         return;
       }
 
-      for (const { call, argsSignature } of callsWithSignature) {
-        callHistory.push({ name: call.name, argsSignature });
+      for (const { realName, argsSignature } of callsWithSignature) {
+        callHistory.push({ name: realName, argsSignature });
       }
 
-      for (const call of toolUseBlocks) {
-        yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: call.name, input: call.input };
+      for (const { call, realName } of callsWithSignature) {
+        yield { type: "tool.started", runId, ts: Date.now(), toolCallId: call.id, name: realName, input: call.input };
       }
 
       const outcomes = createChannel<ToolOutcome>();
-      const tasks = toolUseBlocks.map(async (call) => {
+      const tasks = callsWithSignature.map(async ({ call, realName }) => {
         const toolSpan = tracer.startSpan(
-          `${GEN_AI_OPERATION_EXECUTE_TOOL} ${call.name}`,
+          `${GEN_AI_OPERATION_EXECUTE_TOOL} ${realName}`,
           {
             attributes: {
               [GEN_AI_OPERATION_NAME]: GEN_AI_OPERATION_EXECUTE_TOOL,
-              [GEN_AI_TOOL_NAME]: call.name,
+              [GEN_AI_TOOL_NAME]: realName,
               [GEN_AI_TOOL_CALL_ID]: call.id,
             },
           },
@@ -240,7 +255,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
         );
         const startedAt = Date.now();
         try {
-          const result = await registry.execute(call.name, call.input);
+          const result = await registry.execute(realName, call.input);
           toolSpan.end();
           outcomes.push({
             event: {
@@ -248,7 +263,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
               runId,
               ts: Date.now(),
               toolCallId: call.id,
-              name: call.name,
+              name: realName,
               result,
               durationMs: Date.now() - startedAt,
             },
@@ -270,7 +285,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
               runId,
               ts: Date.now(),
               toolCallId: call.id,
-              name: call.name,
+              name: realName,
               error: errorMessage,
             },
             toolResult: {
