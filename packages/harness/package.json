@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "dev:run": "tsx src/dev-run.ts"
+    "dev:run": "NODE_USE_ENV_PROXY=1 tsx src/dev-run.ts"
   },
   "dependencies": {
     "@agent-desk/mcp-client": "workspace:*",
