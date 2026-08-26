@@ -4,6 +4,7 @@ import type { SelectionTask } from "../tasks.js";
 
 export interface SelectionResult {
   toolName: string | null;
+  skillsConsidered: number;
   inputTokens: number;
   outputTokens: number;
   latencyMs: number;
@@ -25,4 +26,46 @@ export function toApiToolName(skillName: string): string {
 
 export function fromApiToolName(apiToolName: string): string {
   return apiToolName.replace(/__/g, ".");
+}
+
+// Selection is scored on tool *name* only — none of these skills are
+// actually invoked — so every tool gets the same permissive placeholder
+// schema instead of a real one.
+const PLACEHOLDER_INPUT_SCHEMA: Anthropic.Tool.InputSchema = { type: "object", properties: {}, additionalProperties: true };
+
+function toolsFromSkills(skills: SyntheticSkillSpec[]): Anthropic.Tool[] {
+  return skills.map((skill) => ({
+    name: toApiToolName(skill.name),
+    description: skill.description,
+    input_schema: PLACEHOLDER_INPUT_SCHEMA,
+  }));
+}
+
+// Shared by every strategy: whatever candidate subset a strategy narrowed
+// the 144 skills down to, ask Haiku to pick one from it and measure the
+// result. Only the *filtering* differs between strategies — this call step
+// doesn't, so it lives here instead of being duplicated per strategy.
+export async function selectFromCandidates(
+  client: Anthropic,
+  task: SelectionTask,
+  candidates: SyntheticSkillSpec[],
+): Promise<SelectionResult> {
+  const start = performance.now();
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 256,
+    tools: toolsFromSkills(candidates),
+    tool_choice: { type: "any" },
+    messages: [{ role: "user", content: task.prompt }],
+  });
+  const latencyMs = performance.now() - start;
+
+  const toolUse = response.content.find((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+  return {
+    toolName: toolUse ? fromApiToolName(toolUse.name) : null,
+    skillsConsidered: candidates.length,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    latencyMs,
+  };
 }
