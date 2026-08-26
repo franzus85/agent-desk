@@ -8,6 +8,10 @@ export interface SelectionResult {
   inputTokens: number;
   outputTokens: number;
   latencyMs: number;
+  // 1-indexed position of the expected tool in a ranking strategy's full
+  // (pre-top-K) ranking, if it produced one. undefined for non-ranking
+  // strategies (naive) — never set instead of guessed at.
+  expectedToolRank?: number;
 }
 
 export interface SelectionStrategy {
