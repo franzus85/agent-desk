@@ -63,7 +63,12 @@ describe("Phase 2 done-when: all three servers reachable through one registry", 
       { id: "calendar", client: new McpClient({ transport: calendarTransport }) },
       {
         id: "wiki",
-        client: new McpClient({ transport: new HttpTransport({ url: `http://127.0.0.1:${WIKI_PORT}/mcp` }) }),
+        client: new McpClient({
+          transport: new HttpTransport({
+            url: `http://127.0.0.1:${WIKI_PORT}/mcp`,
+            headers: { Authorization: "Bearer dev-mock-token" },
+          }),
+        }),
       },
     ]);
 

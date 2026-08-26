@@ -33,7 +33,12 @@ beforeAll(async () => {
     });
   });
 
-  client = new McpClient({ transport: new HttpTransport({ url: `http://127.0.0.1:${PORT}/mcp` }) });
+  client = new McpClient({
+    transport: new HttpTransport({
+      url: `http://127.0.0.1:${PORT}/mcp`,
+      headers: { Authorization: "Bearer dev-mock-token" },
+    }),
+  });
 });
 
 afterAll(() => {
@@ -59,6 +64,27 @@ describe("mcp-wiki server (real HTTP process)", () => {
     expect(JSON.parse(content[0]?.text ?? "[]")).toEqual([{ id: "q3-roadmap", title: "Q3 Roadmap" }]);
   });
 
+  it("rejects a request with no bearer token (401)", async () => {
+    const response = await fetch(`http://127.0.0.1:${PORT}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("Bearer");
+  });
+
+  it("rejects a request with the wrong bearer token (401)", async () => {
+    const response = await fetch(`http://127.0.0.1:${PORT}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer not-the-right-token" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
   it("rejects a request whose Mcp-Method header does not match the body (HeaderMismatch)", async () => {
     const response = await fetch(`http://127.0.0.1:${PORT}/mcp`, {
       method: "POST",
@@ -67,6 +93,7 @@ describe("mcp-wiki server (real HTTP process)", () => {
         Accept: "application/json, text/event-stream",
         "MCP-Protocol-Version": "2026-07-28",
         "Mcp-Method": "tools/list", // deliberately wrong for a tools/call body
+        Authorization: "Bearer dev-mock-token",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",

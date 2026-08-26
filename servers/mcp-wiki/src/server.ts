@@ -8,6 +8,36 @@ const PORT = Number(process.env["MCP_WIKI_PORT"] ?? 8934);
 // so we actually exercise the SSE response mode, not just plain JSON.
 const SIMULATED_DELAY_MS = Number(process.env["MCP_WIKI_DELAY_MS"] ?? 300);
 
+// --- Mocked auth (Phase 2 Step 7) ---
+// Stand-in for a real OAuth 2.1 resource-server integration, which this
+// project deliberately reads about but does not build (docs/PRD.md, Phase 2:
+// "read but do not build"). A real implementation would add, at minimum:
+//  - RFC 9728 Protected Resource Metadata: this server would expose
+//    /.well-known/oauth-protected-resource and reference it via the
+//    WWW-Authenticate `resource_metadata` param on every 401, so a client
+//    can discover which authorization server to use.
+//  - RFC 8414 / OpenID Connect Discovery on that authorization server, plus
+//    Client ID Metadata Documents (preferred as of 2026-07-28) or Dynamic
+//    Client Registration for client registration.
+//  - RFC 8707 Resource Indicators: the client requests a token scoped to
+//    THIS server's canonical URI via a `resource` parameter on both the
+//    authorization and token requests.
+//  - Real audience validation here: the server MUST verify a presented
+//    token was issued specifically for this resource, not merely that it's
+//    *a* valid token from a trusted issuer. Skipping that check is exactly
+//    what makes "token passthrough" an anti-pattern — a token minted for a
+//    different resource could be replayed here and this mock would have no
+//    way to tell.
+//  - RFC 9207 `iss` validation client-side, against authorization mix-up
+//    attacks across multiple authorization servers.
+//  - 403 + `WWW-Authenticate: error="insufficient_scope"` for scope
+//    step-up, instead of this mock's flat allow/deny.
+const MOCK_TOKEN = process.env["MCP_WIKI_MOCK_TOKEN"] ?? "dev-mock-token";
+
+function isAuthorized(req: IncomingMessage): boolean {
+  return req.headers.authorization === `Bearer ${MOCK_TOKEN}`;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -55,6 +85,12 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
 
   if (req.method !== "POST" || req.url !== "/mcp") {
     res.writeHead(405, { Allow: "POST" });
+    res.end();
+    return;
+  }
+
+  if (!isAuthorized(req)) {
+    res.writeHead(401, { "WWW-Authenticate": "Bearer" });
     res.end();
     return;
   }
