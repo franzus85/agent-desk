@@ -38,16 +38,13 @@ function color(format: Parameters<typeof styleText>[0], text: string): string {
 export class CompactConsoleSpanExporter implements SpanExporter {
   export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
     for (const span of spans) {
-      const isRoot = !span.parentSpanContext;
-      const indent = isRoot ? "" : "  ";
+      const indent = span.parentSpanContext ? "  " : "";
       const isError = span.status.code === SpanStatusCode.ERROR;
       const symbol = isError ? "✗" : "⏱";
 
-      // Full id on the root span (invoke_agent) — that's the one worth
-      // copy-pasting into Phoenix/Grafana's trace search. Children reuse the
-      // short form so lines stay scannable.
-      const fullTraceId = span.spanContext().traceId;
-      const traceId = color("gray", `[${isRoot ? fullTraceId : fullTraceId.slice(0, 8)}]`);
+      // Full id on every line — copy-pastable into Phoenix/Grafana's trace
+      // search without having to hunt for the one line that has it.
+      const traceId = color("gray", `[${span.spanContext().traceId}]`);
       const head = color(isError ? "red" : "green", `${symbol} ${span.name}`);
       const duration = color("yellow", formatDuration(span.duration));
       const parts = [`${indent}${traceId} ${head} · ${duration}`];

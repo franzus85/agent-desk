@@ -41,11 +41,11 @@ describe("CompactConsoleSpanExporter", () => {
 
     expect(lines[0]?.startsWith("[abcdef0123456789]")).toBe(true);
     expect(lines[0]).toContain("⏱ invoke_agent");
-    expect(lines[1]?.startsWith("  [abcdef01]")).toBe(true);
+    expect(lines[1]?.startsWith("  [abcdef0123456789]")).toBe(true);
     expect(lines[1]).toContain("⏱ chat claude-haiku-4-5");
   });
 
-  it("shows the full trace id on the root span, truncated on children", () => {
+  it("shows the full (untruncated) trace id on every span, root and children alike", () => {
     const exporter = new CompactConsoleSpanExporter();
     const spanContext = () => ({ traceId: "0123456789abcdef0123456789abcdef", spanId: "s", traceFlags: 1 });
     exporter.export(
@@ -57,8 +57,7 @@ describe("CompactConsoleSpanExporter", () => {
     );
 
     expect(lines[0]).toContain("[0123456789abcdef0123456789abcdef]");
-    expect(lines[1]).toContain("[01234567]");
-    expect(lines[1]).not.toContain("[0123456789abcdef0123456789abcdef]");
+    expect(lines[1]).toContain("[0123456789abcdef0123456789abcdef]");
   });
 
   it("includes gen_ai usage attributes for chat spans", () => {
