@@ -1,0 +1,17 @@
+id: weekly-report-happy
+prompt: "Write my weekly status report for the current week."
+fixtures: seed-week-34
+expect:
+  outcome:
+    - type: file_exists
+      path: weekly-report.md
+    - type: contains_all
+      values: ["Project Atlas", "Q3 planning review"]
+    - type: not_contains
+      values: ["Project Cygnus"]
+  trajectory:
+    must_call: [calendar.list, notes.search, notes.write]
+    must_not_call: [wiki.search]
+    max_steps: 8
+  judge:
+    rubric: rubrics/status-report.md
