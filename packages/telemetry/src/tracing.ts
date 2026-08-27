@@ -1,8 +1,9 @@
 import { trace, type Tracer } from "@opentelemetry/api";
 import { resourceFromAttributes } from "@opentelemetry/resources";
-import { BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { BatchSpanProcessor, SimpleSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { CompactConsoleSpanExporter } from "./console-span-exporter.js";
 
 let provider: NodeTracerProvider | undefined;
 
@@ -12,7 +13,7 @@ let provider: NodeTracerProvider | undefined;
 export function initTracing(serviceName = "agent-desk"): void {
   if (provider) return;
 
-  const spanProcessors: SpanProcessor[] = [new SimpleSpanProcessor(new ConsoleSpanExporter())];
+  const spanProcessors: SpanProcessor[] = [new SimpleSpanProcessor(new CompactConsoleSpanExporter())];
 
   const otlpEndpoint = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
   if (otlpEndpoint) {
