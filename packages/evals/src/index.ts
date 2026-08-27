@@ -5,3 +5,5 @@ export { seedFixture } from "./fixtures.js";
 export type { SeededFixture } from "./fixtures.js";
 export { scoreOutcome } from "./outcome-scorer.js";
 export type { OutcomeContext, OutcomeCheckResult, OutcomeScore } from "./outcome-scorer.js";
+export { scoreTrajectory } from "./trajectory-scorer.js";
+export type { TrajectoryScore } from "./trajectory-scorer.js";
