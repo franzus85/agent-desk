@@ -5,4 +5,7 @@ export interface AgentDeskApi {
   ping(): Promise<string>;
   echo(text: string): Promise<string>;
   listTools(): Promise<string[]>;
+  saveConnectorSecret(name: string, value: string): Promise<void>;
+  // Never returns the decrypted secret itself — only whether it matches.
+  verifyConnectorSecret(name: string, expected: string): Promise<boolean>;
 }

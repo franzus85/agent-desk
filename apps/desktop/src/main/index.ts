@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandler } from "./ipc-router.js";
 import { sendToHarness } from "./harness-bridge.js";
+import { loadSecret, saveSecret } from "./secret-store.js";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -18,6 +19,13 @@ registerIpcHandler(ipcMain, "listTools", async () => {
   const response = await sendToHarness({ type: "list-tools" });
   if (response.type === "error") throw new Error(response.message);
   return response.tools;
+});
+registerIpcHandler(ipcMain, "saveConnectorSecret", async ({ name, value }) => {
+  await saveSecret(name, value);
+});
+registerIpcHandler(ipcMain, "verifyConnectorSecret", async ({ name, expected }) => {
+  const actual = await loadSecret(name);
+  return actual === expected;
 });
 
 function createWindow(): void {

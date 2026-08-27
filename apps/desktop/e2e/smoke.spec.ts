@@ -93,6 +93,25 @@ test("listTools spawns the real MCP servers inside the utility process and retur
   }
 });
 
+test("a fake connector secret round-trips through the OS keychain via safeStorage", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    const outcome = await page.evaluate(async () => {
+      const name = "sap-joule-connector";
+      await window.agentDesk.saveConnectorSecret(name, "fake-connector-secret-12345");
+      const matchesCorrect = await window.agentDesk.verifyConnectorSecret(name, "fake-connector-secret-12345");
+      const matchesWrong = await window.agentDesk.verifyConnectorSecret(name, "not-the-secret");
+      return { matchesCorrect, matchesWrong };
+    });
+    // The wrong-value check proves this reads back real decrypted content,
+    // not just "a secret exists under this name".
+    expect(outcome).toEqual({ matchesCorrect: true, matchesWrong: false });
+  } finally {
+    await app.close();
+  }
+});
+
 test("renderer has no Node access — sandbox:true, contextIsolation:true, nodeIntegration:false all hold", async () => {
   const app = await launchApp();
   try {

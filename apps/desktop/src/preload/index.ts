@@ -10,6 +10,9 @@ const api: AgentDeskApi = {
   ping: () => ipcRenderer.invoke("ping") as Promise<string>,
   echo: (text) => ipcRenderer.invoke("echo", { text }) as Promise<string>,
   listTools: () => ipcRenderer.invoke("listTools") as Promise<string[]>,
+  saveConnectorSecret: (name, value) => ipcRenderer.invoke("saveConnectorSecret", { name, value }) as Promise<void>,
+  verifyConnectorSecret: (name, expected) =>
+    ipcRenderer.invoke("verifyConnectorSecret", { name, expected }) as Promise<boolean>,
 };
 
 contextBridge.exposeInMainWorld("agentDesk", api);
