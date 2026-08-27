@@ -20,8 +20,25 @@ async function launchApp(): Promise<ElectronApplication> {
 test("window boots with the expected title", async () => {
   const app = await launchApp();
   try {
-    const window = await app.firstWindow();
-    await expect(window).toHaveTitle("AgentDesk");
+    const page = await app.firstWindow();
+    await expect(page).toHaveTitle("AgentDesk");
+  } finally {
+    await app.close();
+  }
+});
+
+test("the preload's contextBridge API round-trips a real IPC call", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    await expect(page.locator("#root")).toHaveText("AgentDesk (bridge says: pong)");
+
+    // Only the narrow api object is reachable — not ipcRenderer itself.
+    const bridgeShape = await page.evaluate(() => ({
+      hasPing: typeof window.agentDesk?.ping === "function",
+      hasIpcRenderer: typeof (window as unknown as Record<string, unknown>)["ipcRenderer"] !== "undefined",
+    }));
+    expect(bridgeShape).toEqual({ hasPing: true, hasIpcRenderer: false });
   } finally {
     await app.close();
   }
@@ -30,8 +47,8 @@ test("window boots with the expected title", async () => {
 test("renderer has no Node access — sandbox:true, contextIsolation:true, nodeIntegration:false all hold", async () => {
   const app = await launchApp();
   try {
-    const window = await app.firstWindow();
-    const nodeAccess = await window.evaluate(() => ({
+    const page = await app.firstWindow();
+    const nodeAccess = await page.evaluate(() => ({
       hasRequire: typeof (globalThis as Record<string, unknown>)["require"] !== "undefined",
       hasModule: typeof (globalThis as Record<string, unknown>)["module"] !== "undefined",
       hasFullProcess: typeof process !== "undefined" && typeof process.version === "string",

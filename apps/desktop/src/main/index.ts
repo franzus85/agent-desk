@@ -6,9 +6,13 @@ import electron from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const { app, BrowserWindow } = electron;
+const { app, BrowserWindow, ipcMain } = electron;
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// Direct handler for now — Step 3 replaces this with a generic Zod-validated
+// router; ping becomes the first channel wired through it.
+ipcMain.handle("ping", () => "pong");
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -18,7 +22,17 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      preload: join(here, "..", "preload", "index.cjs"),
     },
+  });
+  // Dev-time diagnostics — surfaces preload/renderer failures in the main
+  // process's own terminal, since a sandboxed renderer has no other way to
+  // report a load failure back to whoever is running the app.
+  win.webContents.on("preload-error", (_event, preloadPath, error) => {
+    console.error("preload-error", preloadPath, error);
+  });
+  win.webContents.on("console-message", (event) => {
+    console.log("[renderer]", event.message);
   });
   void win.loadFile(join(here, "..", "renderer", "index.html"));
 }

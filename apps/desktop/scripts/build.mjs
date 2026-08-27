@@ -19,6 +19,19 @@ await build({
   sourcemap: true,
 });
 
+// CJS, unlike main: a sandboxed preload script's loader rejects ESM
+// outright ("Cannot use import statement outside a module") — confirmed
+// empirically, not a documented restriction I could find up front.
+await build({
+  entryPoints: [join(root, "src/preload/index.ts")],
+  outfile: join(root, "dist/preload/index.cjs"),
+  platform: "node",
+  format: "cjs",
+  bundle: true,
+  external: ["electron"],
+  sourcemap: true,
+});
+
 // Renderer is a plain <script> tag in a Chromium page — bundle to a single
 // browser-target IIFE, no module system needed.
 await build({
