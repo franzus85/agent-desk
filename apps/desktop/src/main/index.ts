@@ -5,14 +5,14 @@
 import electron from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { registerIpcHandler } from "./ipc-router.js";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// Direct handler for now — Step 3 replaces this with a generic Zod-validated
-// router; ping becomes the first channel wired through it.
-ipcMain.handle("ping", () => "pong");
+registerIpcHandler(ipcMain, "ping", () => "pong");
+registerIpcHandler(ipcMain, "echo", ({ text }) => text);
 
 function createWindow(): void {
   const win = new BrowserWindow({

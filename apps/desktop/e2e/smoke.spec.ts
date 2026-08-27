@@ -44,6 +44,41 @@ test("the preload's contextBridge API round-trips a real IPC call", async () => 
   }
 });
 
+test("echo round-trips a valid payload through the Zod-validated IPC router", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    const result = await page.evaluate(() => window.agentDesk.echo("hello from the renderer"));
+    expect(result).toBe("hello from the renderer");
+  } finally {
+    await app.close();
+  }
+});
+
+test("an invalid IPC payload is rejected at the boundary with a typed error, not executed", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    // Simulates a compromised/buggy renderer sending a malformed payload —
+    // bypasses the TS-typed api on purpose, since that's exactly the input
+    // registerIpcHandler's schema check exists to catch.
+    const rejection = await page.evaluate(async () => {
+      try {
+        await (window as unknown as { agentDesk: { echo: (input: unknown) => Promise<string> } }).agentDesk.echo({
+          text: 42,
+        });
+        return { rejected: false, message: undefined };
+      } catch (error) {
+        return { rejected: true, message: error instanceof Error ? error.message : String(error) };
+      }
+    });
+    expect(rejection.rejected).toBe(true);
+    expect(rejection.message).toContain("IPC_VALIDATION_ERROR");
+  } finally {
+    await app.close();
+  }
+});
+
 test("renderer has no Node access — sandbox:true, contextIsolation:true, nodeIntegration:false all hold", async () => {
   const app = await launchApp();
   try {

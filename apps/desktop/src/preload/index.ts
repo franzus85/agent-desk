@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer } = electron;
 // or the renderer could invoke/listen on any channel it likes.
 const api: AgentDeskApi = {
   ping: () => ipcRenderer.invoke("ping") as Promise<string>,
+  echo: (text) => ipcRenderer.invoke("echo", { text }) as Promise<string>,
 };
 
 contextBridge.exposeInMainWorld("agentDesk", api);
