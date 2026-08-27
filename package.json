@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "pnpm -r --if-present run typecheck"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "eval": "pnpm --filter @agent-desk/evals run eval"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

@@ -39,6 +39,9 @@ export interface RunResult {
   trajectory: TrajectoryScore;
   judge?: JudgeVerdict;
   durationMs: number;
+  // Recorded explicitly rather than left to runAgent's internal default —
+  // the reporter (Step 6) needs to know which model ran to price it.
+  model: string;
   events: AgentEvent[];
 }
 
@@ -52,8 +55,13 @@ export interface TaskResult {
 }
 
 const DEFAULT_N = 3;
+// Matches the harness's own DEFAULT_MODEL (loop.ts) — kept as our own
+// constant rather than relying on that default silently, since the
+// reporter needs to know which model actually ran to price it.
+const DEFAULT_EXECUTOR_MODEL = "claude-opus-5";
 
 async function runOnce(task: Task, runIndex: number, options: RunnerOptions): Promise<RunResult> {
+  const model = options.model ?? DEFAULT_EXECUTOR_MODEL;
   const seeded = await seedFixture(options.fixturesRoot, task.fixtures);
   const notesTransport = new StdioTransport(tsxBin, [notesEntry], {
     env: { ...process.env, MCP_NOTES_DATA_DIR: seeded.notesDir },
@@ -82,7 +90,7 @@ async function runOnce(task: Task, runIndex: number, options: RunnerOptions): Pr
       registry,
       task: task.prompt,
       runId: randomUUID(),
-      model: options.model,
+      model,
       maxTurns: options.maxTurns,
     })) {
       events.push(event);
@@ -110,6 +118,7 @@ async function runOnce(task: Task, runIndex: number, options: RunnerOptions): Pr
       trajectory,
       judge: judgeVerdict,
       durationMs,
+      model,
       events,
     };
   } finally {

@@ -12,3 +12,8 @@ export type { JudgeClient, JudgeContext, JudgeOptions, JudgeVerdict } from "./ju
 export { loadRubric } from "./rubrics.js";
 export { runTask, runTasks } from "./runner.js";
 export type { RunnerOptions, RunResult, TaskResult } from "./runner.js";
+export { costUsd } from "./pricing.js";
+export type { ModelPricing, RunUsage } from "./pricing.js";
+export { buildReport, diffReports, renderHtml } from "./report.js";
+export type { EvalReport, TaskReport, ReportDiff, TaskDiffEntry } from "./report.js";
+export { loadPreviousReport, writeReport } from "./report-io.js";

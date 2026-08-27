@@ -85,7 +85,13 @@ function fakeAgentClient(script: FakeTurn[]): AgentClient {
 }
 
 function fakeJudgeClient(verdict: JudgeVerdict): JudgeClient {
-  return { messages: { parse: async () => ({ parsed_output: verdict }) } };
+  return {
+    messages: {
+      create: async () => ({
+        content: [{ type: "text", text: JSON.stringify(verdict), citations: null }] as Anthropic.ContentBlock[],
+      }),
+    },
+  };
 }
 
 async function loadWeeklyReportTask() {

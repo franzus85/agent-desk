@@ -9,16 +9,18 @@ const verdictSchema = z.object({
 export type JudgeVerdict = z.infer<typeof verdictSchema>;
 
 // Mirrors the harness's AgentClient pattern (loop.ts): a minimal structural
-// interface instead of the full Anthropic class, so tests can pass a plain
-// object and the real SDK client satisfies it without extra wiring.
+// interface over messages.create's plain Message shape, not messages.parse()
+// — parse()'s return type is generic over output_config.format in a way
+// that doesn't survive being narrowed to a simpler interface, so we do the
+// JSON parse + schema validation ourselves instead.
 export interface JudgeClient {
   messages: {
-    parse(params: {
+    create(params: {
       model: string;
       max_tokens: number;
       output_config: { effort?: "low" | "medium" | "high" | "xhigh" | "max"; format: ReturnType<typeof zodOutputFormat> };
       messages: Anthropic.MessageParam[];
-    }): Promise<{ parsed_output: JudgeVerdict | null }>;
+    }): Promise<{ content: Anthropic.ContentBlock[] }>;
   };
 }
 
@@ -42,7 +44,7 @@ const DEFAULT_JUDGE_MODEL = "claude-haiku-4-5";
 export async function judge(context: JudgeContext, options: JudgeOptions): Promise<JudgeVerdict> {
   const { client, model = DEFAULT_JUDGE_MODEL, effort = "low" } = options;
 
-  const response = await client.messages.parse({
+  const response = await client.messages.create({
     model,
     max_tokens: 1024,
     output_config: { effort, format: zodOutputFormat(verdictSchema) },
@@ -59,8 +61,20 @@ export async function judge(context: JudgeContext, options: JudgeOptions): Promi
     ],
   });
 
-  if (!response.parsed_output) {
+  const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === "text");
+  const verdict = parseVerdict(textBlock?.text);
+  if (!verdict) {
     return { passed: false, reasoning: "Judge response could not be parsed into a verdict." };
   }
-  return response.parsed_output;
+  return verdict;
+}
+
+function parseVerdict(text: string | undefined): JudgeVerdict | undefined {
+  if (!text) return undefined;
+  try {
+    const parsed = verdictSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
 }
