@@ -1,5 +1,5 @@
 export { defineTool } from "./tool.js";
-export type { Tool } from "./tool.js";
+export type { Tool, ToolAccess } from "./tool.js";
 export {
   ToolRegistry,
   ToolNotFoundError,

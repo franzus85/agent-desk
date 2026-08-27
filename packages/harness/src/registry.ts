@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Tool } from "./tool.js";
+import type { Tool, ToolAccess } from "./tool.js";
 
 export class ToolNotFoundError extends Error {
   constructor(
@@ -29,6 +29,7 @@ export interface ToolSpec {
   name: string;
   description: string;
   inputSchema: unknown;
+  access: ToolAccess;
 }
 
 export interface RemoteTool {
@@ -39,12 +40,14 @@ export interface RemoteTool {
   // against, so the handler receives the raw input as-is.
   inputSchema: unknown;
   handler: (input: unknown) => Promise<unknown>;
+  access?: ToolAccess;
 }
 
 interface RegisteredEntry {
   name: string;
   description: string;
   jsonSchema: unknown;
+  access: ToolAccess;
   execute: (rawInput: unknown) => Promise<unknown>;
 }
 
@@ -57,6 +60,7 @@ export class ToolRegistry {
       name: tool.name,
       description: tool.description,
       jsonSchema: z.toJSONSchema(tool.inputSchema),
+      access: tool.access ?? "read",
       execute: async (rawInput) => {
         const parsed = tool.inputSchema.safeParse(rawInput);
         if (!parsed.success) {
@@ -74,6 +78,7 @@ export class ToolRegistry {
       name: tool.name,
       description: tool.description,
       jsonSchema: tool.inputSchema,
+      access: tool.access ?? "read",
       execute: tool.handler,
     });
   }
@@ -86,11 +91,18 @@ export class ToolRegistry {
   }
 
   specs(): ToolSpec[] {
-    return [...this.entries.values()].map(({ name, description, jsonSchema }) => ({
+    return [...this.entries.values()].map(({ name, description, jsonSchema, access }) => ({
       name,
       description,
       inputSchema: jsonSchema,
+      access,
     }));
+  }
+
+  // Used by the permission gate (loop.ts) to decide whether a call needs
+  // confirmation before execute() ever runs.
+  accessOf(name: string): ToolAccess | undefined {
+    return this.entries.get(name)?.access;
   }
 
   async execute(name: string, rawInput: unknown): Promise<unknown> {
