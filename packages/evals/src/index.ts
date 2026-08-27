@@ -7,3 +7,6 @@ export { scoreOutcome } from "./outcome-scorer.js";
 export type { OutcomeContext, OutcomeCheckResult, OutcomeScore } from "./outcome-scorer.js";
 export { scoreTrajectory } from "./trajectory-scorer.js";
 export type { TrajectoryScore } from "./trajectory-scorer.js";
+export { judge } from "./judge.js";
+export type { JudgeClient, JudgeContext, JudgeOptions, JudgeVerdict } from "./judge.js";
+export { loadRubric } from "./rubrics.js";

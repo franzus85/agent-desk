@@ -225,6 +225,9 @@ importers:
       '@agent-desk/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@anthropic-ai/sdk':
+        specifier: ^0.120.0
+        version: 0.120.0(zod@4.4.3)
       yaml:
         specifier: ^2.6.1
         version: 2.9.0
