@@ -7,6 +7,7 @@ function fakeSpan(overrides: Partial<ReadableSpan>): ReadableSpan {
   return {
     name: "span",
     parentSpanContext: undefined,
+    spanContext: () => ({ traceId: "abcdef0123456789", spanId: "0123456789abcdef", traceFlags: 1 }),
     duration: [0, 500_000],
     status: { code: SpanStatusCode.OK },
     attributes: {},
@@ -38,8 +39,20 @@ describe("CompactConsoleSpanExporter", () => {
       () => {},
     );
 
-    expect(lines[0]?.startsWith("⏱ invoke_agent")).toBe(true);
-    expect(lines[1]?.startsWith("  ⏱ chat claude-haiku-4-5")).toBe(true);
+    expect(lines[0]?.startsWith("[abcdef01]")).toBe(true);
+    expect(lines[0]).toContain("⏱ invoke_agent");
+    expect(lines[1]?.startsWith("  [abcdef01]")).toBe(true);
+    expect(lines[1]).toContain("⏱ chat claude-haiku-4-5");
+  });
+
+  it("shows the first 8 characters of the trace id", () => {
+    const exporter = new CompactConsoleSpanExporter();
+    exporter.export(
+      [fakeSpan({ spanContext: () => ({ traceId: "0123456789abcdef0123456789abcdef", spanId: "s", traceFlags: 1 }) })],
+      () => {},
+    );
+
+    expect(lines[0]).toContain("[01234567]");
   });
 
   it("includes gen_ai usage attributes for chat spans", () => {
