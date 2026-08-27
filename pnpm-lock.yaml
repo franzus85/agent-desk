@@ -245,6 +245,16 @@ importers:
         specifier: ^0.28.2
         version: 0.28.2
 
+  packages/chat-core:
+    dependencies:
+      '@agent-desk/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+
   packages/evals:
     dependencies:
       '@agent-desk/harness':
