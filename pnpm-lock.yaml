@@ -222,6 +222,12 @@ importers:
 
   packages/evals:
     dependencies:
+      '@agent-desk/harness':
+        specifier: workspace:*
+        version: link:../harness
+      '@agent-desk/mcp-client':
+        specifier: workspace:*
+        version: link:../mcp-client
       '@agent-desk/protocol':
         specifier: workspace:*
         version: link:../protocol

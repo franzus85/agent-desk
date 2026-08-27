@@ -11,10 +11,21 @@ const runStarted = z.object({
   task: z.string(),
 });
 
+const usage = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadInputTokens: z.number(),
+  cacheCreationInputTokens: z.number(),
+});
+
 const runFinished = z.object({
   type: z.literal("run.finished"),
   ...envelope,
   stopReason: z.enum(["end_turn", "turn_budget", "repeat_detected", "pause_turn"]),
+  // Cumulative across every turn of the run — absent from events emitted
+  // before this field existed. Lets a consumer (e.g. an eval runner) report
+  // mean cost per task without standing up its own OTel exporter.
+  usage: usage.optional(),
 });
 
 const runError = z.object({

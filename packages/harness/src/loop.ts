@@ -142,6 +142,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
 
     const messages: Anthropic.MessageParam[] = [{ role: "user", content: task }];
     const callHistory: CallRecord[] = [];
+    const cumulativeUsage = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
 
     for (let turn = 0; turn < maxTurns; turn++) {
       const chatSpan = tracer.startSpan(
@@ -189,11 +190,15 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
 
       chatSpan.setAttribute(GEN_AI_USAGE_INPUT_TOKENS, message.usage.input_tokens);
       chatSpan.setAttribute(GEN_AI_USAGE_OUTPUT_TOKENS, message.usage.output_tokens);
+      cumulativeUsage.inputTokens += message.usage.input_tokens;
+      cumulativeUsage.outputTokens += message.usage.output_tokens;
       if (message.usage.cache_read_input_tokens != null) {
         chatSpan.setAttribute(GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS, message.usage.cache_read_input_tokens);
+        cumulativeUsage.cacheReadInputTokens += message.usage.cache_read_input_tokens;
       }
       if (message.usage.cache_creation_input_tokens != null) {
         chatSpan.setAttribute(GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS, message.usage.cache_creation_input_tokens);
+        cumulativeUsage.cacheCreationInputTokens += message.usage.cache_creation_input_tokens;
       }
 
       const toolUseBlocks = message.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
@@ -203,7 +208,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
       chatSpan.end();
 
       if (message.stop_reason === "end_turn") {
-        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "end_turn" };
+        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "end_turn", usage: cumulativeUsage };
         return;
       }
 
@@ -235,7 +240,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
       );
 
       if (wouldRepeat) {
-        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "repeat_detected" };
+        yield { type: "run.finished", runId, ts: Date.now(), stopReason: "repeat_detected", usage: cumulativeUsage };
         return;
       }
 
@@ -336,7 +341,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
       messages.push({ role: "user", content: toolResults });
     }
 
-    yield { type: "run.finished", runId, ts: Date.now(), stopReason: "turn_budget" };
+    yield { type: "run.finished", runId, ts: Date.now(), stopReason: "turn_budget", usage: cumulativeUsage };
   } finally {
     rootSpan.end();
   }

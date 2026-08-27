@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agent-desk/harness": "workspace:*",
+    "@agent-desk/mcp-client": "workspace:*",
     "@agent-desk/protocol": "workspace:*",
     "@anthropic-ai/sdk": "^0.120.0",
     "yaml": "^2.6.1",

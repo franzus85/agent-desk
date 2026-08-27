@@ -10,3 +10,5 @@ export type { TrajectoryScore } from "./trajectory-scorer.js";
 export { judge } from "./judge.js";
 export type { JudgeClient, JudgeContext, JudgeOptions, JudgeVerdict } from "./judge.js";
 export { loadRubric } from "./rubrics.js";
+export { runTask, runTasks } from "./runner.js";
+export type { RunnerOptions, RunResult, TaskResult } from "./runner.js";
