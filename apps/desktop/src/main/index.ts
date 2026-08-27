@@ -48,6 +48,18 @@ function createWindow(): void {
   win.webContents.on("console-message", (event) => {
     console.log("[renderer]", event.message);
   });
+
+  // Navigation lockdown. Nothing in this app should ever navigate the
+  // window away from its own local renderer page or open a new window —
+  // there is no legitimate reason for either, and both are exactly what a
+  // successful injection into rendered/model-generated content would try
+  // first. shell.openExternal is simply never imported anywhere, so no
+  // model-generated URL has a code path to reach it at all.
+  win.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
   void win.loadFile(join(here, "..", "renderer", "index.html"));
 }
 

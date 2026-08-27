@@ -112,6 +112,48 @@ test("a fake connector secret round-trips through the OS keychain via safeStorag
   }
 });
 
+test("navigation away from the app's own page is blocked", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    const before = page.url();
+    await page.evaluate(() => {
+      window.location.href = "https://example.com";
+    });
+    await page.waitForTimeout(300);
+    expect(page.url()).toBe(before);
+  } finally {
+    await app.close();
+  }
+});
+
+test("window.open is denied — no second window appears", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    await page.evaluate(() => {
+      window.open("https://example.com", "_blank");
+    });
+    await page.waitForTimeout(300);
+    expect(app.windows()).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("a Content-Security-Policy is set", async () => {
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    const csp = await page.evaluate(
+      () => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
+    );
+    expect(csp).toBe("default-src 'self'");
+  } finally {
+    await app.close();
+  }
+});
+
 test("renderer has no Node access — sandbox:true, contextIsolation:true, nodeIntegration:false all hold", async () => {
   const app = await launchApp();
   try {
