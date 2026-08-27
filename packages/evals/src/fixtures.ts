@@ -1,6 +1,7 @@
-import { access, cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathExists } from "./fs-utils.js";
 
 export interface SeededFixture {
   // Points a fresh MCP_NOTES_DATA_DIR at a private copy of the fixture's
@@ -11,15 +12,6 @@ export interface SeededFixture {
   // MCP_CALENDAR_DATA_FILE — no copy needed.
   calendarFile: string | undefined;
   cleanup: () => Promise<void>;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function seedFixture(fixturesRoot: string, name: string): Promise<SeededFixture> {

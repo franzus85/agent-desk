@@ -3,3 +3,5 @@ export type { OutcomeCheck, Task, TrajectoryExpectation, JudgeExpectation } from
 export { parseTaskFile, loadTasksFromDir } from "./task-loader.js";
 export { seedFixture } from "./fixtures.js";
 export type { SeededFixture } from "./fixtures.js";
+export { scoreOutcome } from "./outcome-scorer.js";
+export type { OutcomeContext, OutcomeCheckResult, OutcomeScore } from "./outcome-scorer.js";
