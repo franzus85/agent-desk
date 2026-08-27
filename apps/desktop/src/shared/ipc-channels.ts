@@ -11,6 +11,14 @@ export const ipcChannels = {
   // Verifies round-trip integrity without ever sending the decrypted
   // secret back to the renderer — the boolean is the whole answer.
   verifyConnectorSecret: { input: z.object({ name: z.string(), expected: z.string() }) },
+  startRun: { input: z.object({ prompt: z.string() }) },
+  cancelRun: { input: z.undefined() },
 } as const;
+
+// main -> renderer push channel (webContents.send), not part of the
+// renderer -> main request router above — outbound data from the
+// privileged process doesn't cross the untrusted-input boundary the Zod
+// validation exists for.
+export const AGENT_EVENT_CHANNEL = "agent-event";
 
 export type IpcChannel = keyof typeof ipcChannels;

@@ -1,6 +1,8 @@
 // Same named-import caveat as main/index.ts: default import + destructure.
 import electron from "electron";
+import type { AgentEvent } from "@agent-desk/protocol";
 import type { AgentDeskApi } from "../shared/api.js";
+import { AGENT_EVENT_CHANNEL } from "../shared/ipc-channels.js";
 
 const { contextBridge, ipcRenderer } = electron;
 
@@ -13,6 +15,13 @@ const api: AgentDeskApi = {
   saveConnectorSecret: (name, value) => ipcRenderer.invoke("saveConnectorSecret", { name, value }) as Promise<void>,
   verifyConnectorSecret: (name, expected) =>
     ipcRenderer.invoke("verifyConnectorSecret", { name, expected }) as Promise<boolean>,
+  startRun: (prompt) => ipcRenderer.invoke("startRun", { prompt }) as Promise<void>,
+  cancelRun: () => ipcRenderer.invoke("cancelRun") as Promise<void>,
+  onAgentEvent: (listener) => {
+    const handler = (_ipcEvent: unknown, event: AgentEvent) => listener(event);
+    ipcRenderer.on(AGENT_EVENT_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(AGENT_EVENT_CHANNEL, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("agentDesk", api);

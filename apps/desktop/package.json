@@ -13,12 +13,19 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "electron": "^44.0.0",
     "esbuild": "^0.28.2"
   },
   "dependencies": {
+    "@agent-desk/chat-core": "workspace:*",
     "@agent-desk/harness": "workspace:*",
     "@agent-desk/mcp-client": "workspace:*",
+    "@agent-desk/protocol": "workspace:*",
+    "@anthropic-ai/sdk": "^0.120.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "zod": "^4.4.3"
   }
 }

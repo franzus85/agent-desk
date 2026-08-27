@@ -31,7 +31,8 @@ test("the preload's contextBridge API round-trips a real IPC call", async () => 
   const app = await launchApp();
   try {
     const page = await app.firstWindow();
-    await expect(page.locator("#status")).toHaveText("AgentDesk (bridge says: pong)");
+    const pong = await page.evaluate(() => window.agentDesk.ping());
+    expect(pong).toBe("pong");
 
     // Only the narrow api object is reachable — not ipcRenderer itself.
     const bridgeShape = await page.evaluate(() => ({

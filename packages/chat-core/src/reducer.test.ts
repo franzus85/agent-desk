@@ -57,11 +57,17 @@ describe("reduceEvent", () => {
     expect(state.items[0]).toMatchObject({ done: true });
   });
 
-  it("resets items on a new run.started", () => {
-    const first = replay([runStarted, { type: "text.delta", runId: "r1", ts: 0, delta: "first run" }]);
+  it("keeps prior items across a new run.started — a follow-up turn appends, it doesn't erase", () => {
+    const first = replay([runStarted, { type: "text.delta", runId: "r1", ts: 0, delta: "first run" }, { type: "run.finished", runId: "r1", ts: 0, stopReason: "end_turn" }]);
     const second = reduceEvent(first, { type: "run.started", runId: "r2", ts: 0, task: "again" });
-    expect(second.items).toEqual([]);
+    expect(second.items).toEqual([{ type: "text", id: "text-0", text: "first run", done: true }]);
     expect(second.status).toBe("running");
+
+    const withSecondReply = reduceEvent(second, { type: "text.delta", runId: "r2", ts: 0, delta: "second run" });
+    expect(withSecondReply.items).toEqual([
+      { type: "text", id: "text-0", text: "first run", done: true },
+      { type: "text", id: "text-1", text: "second run", done: false },
+    ]);
   });
 
   it("ignores event types the timeline doesn't render, without losing state", () => {

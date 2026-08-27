@@ -45,14 +45,16 @@ await build({
 });
 
 // Renderer is a plain <script> tag in a Chromium page — bundle to a single
-// browser-target IIFE, no module system needed.
+// browser-target IIFE, no module system needed. jsx:"automatic" is esbuild's
+// built-in JSX transform (React 17+ runtime) — no separate Babel step.
 await build({
-  entryPoints: [join(root, "src/renderer/index.ts")],
+  entryPoints: [join(root, "src/renderer/index.tsx")],
   outfile: join(root, "dist/renderer/index.js"),
   platform: "browser",
   format: "iife",
   bundle: true,
   sourcemap: true,
+  jsx: "automatic",
 });
 
 await mkdir(join(root, "dist/renderer"), { recursive: true });

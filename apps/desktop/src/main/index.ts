@@ -6,8 +6,9 @@ import electron from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandler } from "./ipc-router.js";
-import { sendToHarness } from "./harness-bridge.js";
+import { onHarnessMessage, postToHarness, sendToHarness } from "./harness-bridge.js";
 import { loadSecret, saveSecret } from "./secret-store.js";
+import { AGENT_EVENT_CHANNEL } from "../shared/ipc-channels.js";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -17,7 +18,9 @@ registerIpcHandler(ipcMain, "ping", () => "pong");
 registerIpcHandler(ipcMain, "echo", ({ text }) => text);
 registerIpcHandler(ipcMain, "listTools", async () => {
   const response = await sendToHarness({ type: "list-tools" });
-  if (response.type === "error") throw new Error(response.message);
+  if (response.type !== "list-tools-result") {
+    throw new Error(response.type === "error" ? response.message : `Unexpected response type "${response.type}" for list-tools.`);
+  }
   return response.tools;
 });
 registerIpcHandler(ipcMain, "saveConnectorSecret", async ({ name, value }) => {
@@ -26,6 +29,12 @@ registerIpcHandler(ipcMain, "saveConnectorSecret", async ({ name, value }) => {
 registerIpcHandler(ipcMain, "verifyConnectorSecret", async ({ name, expected }) => {
   const actual = await loadSecret(name);
   return actual === expected;
+});
+registerIpcHandler(ipcMain, "startRun", ({ prompt }) => {
+  postToHarness({ type: "start-run", prompt });
+});
+registerIpcHandler(ipcMain, "cancelRun", () => {
+  postToHarness({ type: "cancel-run" });
 });
 
 function createWindow(): void {
@@ -59,6 +68,17 @@ function createWindow(): void {
     event.preventDefault();
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+  // Push every AgentEvent from the utility process straight to this
+  // window's renderer. This is main -> renderer, the trusted direction —
+  // the Zod router (Step 3) validates the untrusted renderer -> main
+  // direction only.
+  const unsubscribe = onHarnessMessage((response) => {
+    if (response.type === "agent-event" && !win.isDestroyed()) {
+      win.webContents.send(AGENT_EVENT_CHANNEL, response.event);
+    }
+  });
+  win.on("closed", unsubscribe);
 
   void win.loadFile(join(here, "..", "renderer", "index.html"));
 }

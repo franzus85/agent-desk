@@ -1,4 +1,5 @@
 import electron from "electron";
+import { EventEmitter } from "node:events";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HarnessRequest, HarnessResponse } from "../shared/harness-messages.js";
@@ -7,16 +8,13 @@ const { utilityProcess } = electron;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+const events = new EventEmitter();
 let child: ReturnType<typeof utilityProcess.fork> | undefined;
-let pendingResolve: ((response: HarnessResponse) => void) | undefined;
 
 function ensureChild(): ReturnType<typeof utilityProcess.fork> {
   if (child) return child;
   const proc = utilityProcess.fork(join(here, "..", "utility", "harness-process.mjs"));
-  proc.on("message", (response: HarnessResponse) => {
-    pendingResolve?.(response);
-    pendingResolve = undefined;
-  });
+  proc.on("message", (response: HarnessResponse) => events.emit("message", response));
   proc.on("exit", (code) => {
     console.error("[main] harness utility process exited", code);
     child = undefined;
@@ -25,15 +23,24 @@ function ensureChild(): ReturnType<typeof utilityProcess.fork> {
   return proc;
 }
 
-// One request in flight at a time — enough for this step's proof (a single
-// list-tools round trip); a real task queue is a later concern once the UI
-// actually needs to issue overlapping requests.
+// One-shot request/response — fine for list-tools, which always replies
+// with exactly one message.
 export function sendToHarness(request: HarnessRequest): Promise<HarnessResponse> {
-  if (pendingResolve) {
-    return Promise.reject(new Error("A harness request is already in flight."));
-  }
   return new Promise((resolve) => {
-    pendingResolve = resolve;
+    events.once("message", resolve);
     ensureChild().postMessage(request);
   });
+}
+
+// start-run's replies are a *stream* of agent-event messages, not a single
+// reply — callers (index.ts, wiring it to webContents.send) subscribe here
+// instead of awaiting a promise.
+export function onHarnessMessage(listener: (response: HarnessResponse) => void): () => void {
+  ensureChild();
+  events.on("message", listener);
+  return () => events.off("message", listener);
+}
+
+export function postToHarness(request: HarnessRequest): void {
+  ensureChild().postMessage(request);
 }
