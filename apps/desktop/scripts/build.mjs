@@ -32,6 +32,18 @@ await build({
   sourcemap: true,
 });
 
+// Utility process — a plain Node process Electron manages (utilityProcess
+// .fork), not a renderer. Same ESM reasoning as main.
+await build({
+  entryPoints: [join(root, "src/utility/harness-process.ts")],
+  outfile: join(root, "dist/utility/harness-process.mjs"),
+  platform: "node",
+  format: "esm",
+  bundle: true,
+  external: ["electron"],
+  sourcemap: true,
+});
+
 // Renderer is a plain <script> tag in a Chromium page — bundle to a single
 // browser-target IIFE, no module system needed.
 await build({

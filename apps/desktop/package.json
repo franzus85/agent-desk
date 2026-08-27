@@ -17,6 +17,8 @@
     "esbuild": "^0.28.2"
   },
   "dependencies": {
+    "@agent-desk/harness": "workspace:*",
+    "@agent-desk/mcp-client": "workspace:*",
     "zod": "^4.4.3"
   }
 }

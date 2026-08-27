@@ -9,6 +9,7 @@ const { contextBridge, ipcRenderer } = electron;
 const api: AgentDeskApi = {
   ping: () => ipcRenderer.invoke("ping") as Promise<string>,
   echo: (text) => ipcRenderer.invoke("echo", { text }) as Promise<string>,
+  listTools: () => ipcRenderer.invoke("listTools") as Promise<string[]>,
 };
 
 contextBridge.exposeInMainWorld("agentDesk", api);

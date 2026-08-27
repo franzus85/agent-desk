@@ -6,6 +6,7 @@ import { z } from "zod";
 export const ipcChannels = {
   ping: { input: z.undefined() },
   echo: { input: z.object({ text: z.string() }) },
+  listTools: { input: z.undefined() },
 } as const;
 
 export type IpcChannel = keyof typeof ipcChannels;

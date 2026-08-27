@@ -4,4 +4,5 @@
 export interface AgentDeskApi {
   ping(): Promise<string>;
   echo(text: string): Promise<string>;
+  listTools(): Promise<string[]>;
 }

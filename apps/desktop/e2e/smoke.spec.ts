@@ -31,7 +31,7 @@ test("the preload's contextBridge API round-trips a real IPC call", async () => 
   const app = await launchApp();
   try {
     const page = await app.firstWindow();
-    await expect(page.locator("#root")).toHaveText("AgentDesk (bridge says: pong)");
+    await expect(page.locator("#status")).toHaveText("AgentDesk (bridge says: pong)");
 
     // Only the narrow api object is reachable — not ipcRenderer itself.
     const bridgeShape = await page.evaluate(() => ({
@@ -74,6 +74,20 @@ test("an invalid IPC payload is rejected at the boundary with a typed error, not
     });
     expect(rejection.rejected).toBe(true);
     expect(rejection.message).toContain("IPC_VALIDATION_ERROR");
+  } finally {
+    await app.close();
+  }
+});
+
+test("listTools spawns the real MCP servers inside the utility process and returns their tools", async () => {
+  test.setTimeout(30_000);
+  const app = await launchApp();
+  try {
+    const page = await app.firstWindow();
+    const tools = await page.evaluate(() => window.agentDesk.listTools());
+    expect(tools.sort()).toEqual(
+      ["notes.list", "notes.search", "notes.write", "calendar.list", "calendar.search"].sort(),
+    );
   } finally {
     await app.close();
   }

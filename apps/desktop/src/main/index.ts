@@ -6,6 +6,7 @@ import electron from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandler } from "./ipc-router.js";
+import { sendToHarness } from "./harness-bridge.js";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -13,6 +14,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 registerIpcHandler(ipcMain, "ping", () => "pong");
 registerIpcHandler(ipcMain, "echo", ({ text }) => text);
+registerIpcHandler(ipcMain, "listTools", async () => {
+  const response = await sendToHarness({ type: "list-tools" });
+  if (response.type === "error") throw new Error(response.message);
+  return response.tools;
+});
 
 function createWindow(): void {
   const win = new BrowserWindow({
