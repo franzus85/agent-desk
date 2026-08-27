@@ -12,3 +12,5 @@ coverage/
 evals/reports/
 packages/skills/synthetic-skills/
 packages/skills/bench-reports/
+apps/desktop/test-results/
+apps/desktop/playwright-report/

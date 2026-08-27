@@ -1,0 +1,19 @@
+{
+  "name": "@agent-desk/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.mjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "dev": "pnpm run build && electron .",
+    "test:e2e": "pnpm run build && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "electron": "^44.0.0",
+    "esbuild": "^0.28.2"
+  }
+}
