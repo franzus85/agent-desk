@@ -33,6 +33,7 @@ describe("parseTaskFile", () => {
       id: "weekly-report-happy",
       prompt: "Write my weekly status report.",
       fixtures: "seed-week-34",
+      tier: "quick",
       expect: {
         outcome: [
           { type: "file_exists", path: "weekly-report.md" },
@@ -65,6 +66,23 @@ expect:
     expect(task.expect.trajectory.must_call).toEqual([]);
     expect(task.expect.trajectory.must_not_call).toEqual([]);
     expect(task.expect.judge).toBeUndefined();
+    expect(task.tier).toBe("quick");
+  });
+
+  it("respects an explicit tier: full", () => {
+    const task = parseTaskFile(
+      `
+id: exploratory
+prompt: "Do the harder thing."
+fixtures: seed-week-34
+tier: full
+expect:
+  trajectory:
+    max_steps: 4
+`,
+      "exploratory.yaml",
+    );
+    expect(task.tier).toBe("full");
   });
 
   it("throws when an outcome check has an unknown type", () => {

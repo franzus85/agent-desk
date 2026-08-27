@@ -17,3 +17,5 @@ export type { ModelPricing, RunUsage } from "./pricing.js";
 export { buildReport, diffReports, renderHtml } from "./report.js";
 export type { EvalReport, TaskReport, ReportDiff, TaskDiffEntry } from "./report.js";
 export { loadPreviousReport, writeReport } from "./report-io.js";
+export { evaluateGate } from "./gate.js";
+export type { GateOptions, GateFailure, GateResult } from "./gate.js";

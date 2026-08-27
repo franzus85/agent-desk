@@ -1,6 +1,7 @@
 id: weekly-report-happy
 prompt: "Write my weekly status report for the current week."
 fixtures: seed-week-34
+tier: quick
 expect:
   outcome:
     - type: file_exists

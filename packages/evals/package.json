@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "eval": "NODE_USE_ENV_PROXY=1 tsx src/cli.ts"
+    "eval": "NODE_USE_ENV_PROXY=1 tsx src/cli.ts",
+    "eval:gate": "NODE_USE_ENV_PROXY=1 tsx src/gate-cli.ts"
   },
   "dependencies": {
     "@agent-desk/harness": "workspace:*",

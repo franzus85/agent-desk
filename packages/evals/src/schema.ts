@@ -38,6 +38,9 @@ export const taskSchema = z.object({
   id: z.string(),
   prompt: z.string(),
   fixtures: z.string(),
+  // "quick" tasks are the curated PR gate — small and expected to be
+  // reliably pass^k; "full" tasks only run in the nightly sweep.
+  tier: z.enum(["quick", "full"]).default("quick"),
   expect: z.object({
     outcome: z.array(outcomeCheckSchema).default([]),
     trajectory: trajectoryExpectationSchema,
