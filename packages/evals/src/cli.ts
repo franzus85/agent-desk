@@ -19,7 +19,7 @@ const tasks = await loadTasksFromDir(join(evalsRoot, "tasks"));
 const results = await runTasks(tasks, {
   client,
   // A real Anthropic client satisfies both AgentClient (messages.stream)
-  // and JudgeClient (messages.parse) — one client, two structural roles.
+  // and JudgeClient (messages.create) — one client, two structural roles.
   judgeClient: client,
   fixturesRoot: join(evalsRoot, "fixtures"),
   evalsRoot,

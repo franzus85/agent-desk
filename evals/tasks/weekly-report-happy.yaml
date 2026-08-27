@@ -1,5 +1,5 @@
 id: weekly-report-happy
-prompt: "Write my weekly status report for the current week."
+prompt: "Write my weekly status report and save it as a note titled 'weekly-report'."
 fixtures: seed-week-34
 tier: quick
 expect:

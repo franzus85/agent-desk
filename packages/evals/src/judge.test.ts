@@ -37,11 +37,11 @@ describe("judge", () => {
     expect(verdict).toEqual({ passed: true, reasoning: "Grouped by project, no inventions." });
   });
 
-  it("defaults to a cheap model at low effort", async () => {
+  it("defaults to a cheap model, with no effort param (Haiku rejects it outright)", async () => {
     const { client, calls } = fakeClient(textResponse(JSON.stringify({ passed: true, reasoning: "ok" } satisfies JudgeVerdict)));
     await judge(context, { client });
     expect(calls[0]?.model).toBe("claude-haiku-4-5");
-    expect(calls[0]?.output_config.effort).toBe("low");
+    expect(calls[0]?.output_config.effort).toBeUndefined();
   });
 
   it("respects an overridden model and effort", async () => {

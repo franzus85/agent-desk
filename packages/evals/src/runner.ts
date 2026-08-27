@@ -30,6 +30,10 @@ export interface RunnerOptions {
   n?: number;
   model?: string;
   maxTurns?: number;
+  // Passed straight through to runAgent. Needed when overriding to a model
+  // that rejects the harness's default adaptive thinking — e.g.
+  // claude-haiku-4-5 (see harness/dev-run.ts, which hits the same thing).
+  thinking?: { type: "adaptive" } | null;
 }
 
 export interface RunResult {
@@ -92,6 +96,7 @@ async function runOnce(task: Task, runIndex: number, options: RunnerOptions): Pr
       runId: randomUUID(),
       model,
       maxTurns: options.maxTurns,
+      thinking: options.thinking,
     })) {
       events.push(event);
       if (event.type === "text.delta") finalResponseText += event.delta;

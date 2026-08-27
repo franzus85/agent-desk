@@ -84,6 +84,33 @@ function fakeAgentClient(script: FakeTurn[]): AgentClient {
   };
 }
 
+interface StreamCall {
+  model: string;
+  thinking?: { type: "adaptive" } | undefined;
+}
+
+function capturingAgentClient(script: FakeTurn[]): { client: AgentClient; calls: StreamCall[] } {
+  const calls: StreamCall[] = [];
+  let index = 0;
+  const client: AgentClient = {
+    messages: {
+      stream(params) {
+        calls.push({ model: params.model, thinking: params.thinking });
+        const turn = script[index];
+        index += 1;
+        if (!turn) throw new Error("Fake agent client ran out of scripted turns.");
+        return {
+          on(event, listener) {
+            if (event === "text") for (const delta of turn.deltas ?? []) listener(delta);
+          },
+          finalMessage: async () => turn.message,
+        };
+      },
+    },
+  };
+  return { client, calls };
+}
+
 function fakeJudgeClient(verdict: JudgeVerdict): JudgeClient {
   return {
     messages: {
@@ -154,4 +181,34 @@ describe("runTask", () => {
     expect(result.runs.map((run) => run.runIndex)).toEqual([0, 1]);
     expect(result.runs.every((run) => run.passed)).toBe(true);
   }, 30000);
+
+  it("forwards model and thinking overrides to runAgent, and records the resolved model per run", async () => {
+    const task = await loadWeeklyReportTask();
+    const { client, calls } = capturingAgentClient(happyPathScript());
+    const judgeClient = fakeJudgeClient({ passed: true, reasoning: "ok" });
+
+    const result = await runTask(task, {
+      client,
+      judgeClient,
+      fixturesRoot,
+      evalsRoot,
+      n: 1,
+      model: "claude-haiku-4-5",
+      thinking: null,
+    });
+
+    expect(calls[0]).toEqual({ model: "claude-haiku-4-5", thinking: undefined });
+    expect(result.runs[0]?.model).toBe("claude-haiku-4-5");
+  }, 20000);
+
+  it("defaults the executor model to claude-opus-5 when none is given", async () => {
+    const task = await loadWeeklyReportTask();
+    const { client, calls } = capturingAgentClient(happyPathScript());
+    const judgeClient = fakeJudgeClient({ passed: true, reasoning: "ok" });
+
+    const result = await runTask(task, { client, judgeClient, fixturesRoot, evalsRoot, n: 1 });
+
+    expect(calls[0]?.model).toBe("claude-opus-5");
+    expect(result.runs[0]?.model).toBe("claude-opus-5");
+  }, 20000);
 });

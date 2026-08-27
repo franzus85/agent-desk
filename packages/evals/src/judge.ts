@@ -32,9 +32,12 @@ export interface JudgeContext {
 
 export interface JudgeOptions {
   client: JudgeClient;
-  // Cheap classification task — a small model at low effort is plenty, and
-  // keeps judge cost from dominating the eval sweep (see PRD Phase 5 cost
-  // control). Mirrors the existing cheap-run default in harness/dev-run.ts.
+  // Cheap classification task — keeps judge cost from dominating the eval
+  // sweep (see PRD Phase 5 cost control) via a cheap *model* by default.
+  // effort is left unset by default: Haiku-tier models reject
+  // output_config.effort outright (400 invalid_request_error) — it only
+  // does anything on Opus-tier models, so callers opt in explicitly when
+  // they override to one of those.
   model?: string;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
@@ -42,12 +45,12 @@ export interface JudgeOptions {
 const DEFAULT_JUDGE_MODEL = "claude-haiku-4-5";
 
 export async function judge(context: JudgeContext, options: JudgeOptions): Promise<JudgeVerdict> {
-  const { client, model = DEFAULT_JUDGE_MODEL, effort = "low" } = options;
+  const { client, model = DEFAULT_JUDGE_MODEL, effort } = options;
 
   const response = await client.messages.create({
     model,
     max_tokens: 1024,
-    output_config: { effort, format: zodOutputFormat(verdictSchema) },
+    output_config: { ...(effort ? { effort } : {}), format: zodOutputFormat(verdictSchema) },
     messages: [
       {
         role: "user",
