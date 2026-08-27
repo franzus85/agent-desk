@@ -63,6 +63,8 @@ await renderToConsole(
     runId: randomUUID(),
     model: "claude-haiku-4-5",
     thinking: null,
+    // Fine here — this is our own throwaway test data, not real user content.
+    captureToolContent: true,
   }),
 );
 

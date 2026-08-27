@@ -9,7 +9,9 @@ import {
   GEN_AI_PROVIDER_ANTHROPIC,
   GEN_AI_PROVIDER_NAME,
   GEN_AI_REQUEST_MODEL,
+  GEN_AI_TOOL_CALL_ARGUMENTS,
   GEN_AI_TOOL_CALL_ID,
+  GEN_AI_TOOL_CALL_RESULT,
   GEN_AI_TOOL_NAME,
   GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
   GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
@@ -59,6 +61,10 @@ export interface RunAgentOptions {
   // param (needed for older models like claude-haiku-4-5 that reject it).
   thinking?: { type: "adaptive" } | null;
   repeatLimit?: number;
+  // Opt-in: attach tool call arguments/results to execute_tool spans. Off by
+  // default since tool payloads can carry sensitive data (matches the GenAI
+  // spec's opt-in stance on content attributes).
+  captureToolContent?: boolean;
 }
 
 const DEFAULT_MODEL = "claude-opus-5";
@@ -112,6 +118,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
     maxTokens = DEFAULT_MAX_TOKENS,
     thinking = { type: "adaptive" },
     repeatLimit = DEFAULT_REPEAT_LIMIT,
+    captureToolContent = false,
   } = options;
 
   const tracer = getTracer();
@@ -253,9 +260,16 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
           },
           rootContext,
         );
+        if (captureToolContent) {
+          toolSpan.setAttribute(GEN_AI_TOOL_CALL_ARGUMENTS, JSON.stringify(call.input));
+        }
         const startedAt = Date.now();
         try {
           const result = await registry.execute(realName, call.input);
+          const content = typeof result === "string" ? result : JSON.stringify(result);
+          if (captureToolContent) {
+            toolSpan.setAttribute(GEN_AI_TOOL_CALL_RESULT, content);
+          }
           toolSpan.end();
           outcomes.push({
             event: {
@@ -270,7 +284,7 @@ export async function* runAgent(options: RunAgentOptions): AsyncGenerator<AgentE
             toolResult: {
               type: "tool_result",
               tool_use_id: call.id,
-              content: typeof result === "string" ? result : JSON.stringify(result),
+              content,
             },
           });
         } catch (error) {

@@ -13,6 +13,12 @@ export const GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS = "gen_ai.usage.cache_write.i
 export const GEN_AI_TOOL_NAME = "gen_ai.tool.name";
 export const GEN_AI_TOOL_CALL_ID = "gen_ai.tool.call.id";
 
+// Opt-in content attributes — the spec keeps anything that can hold prompt/
+// tool payload data opt-in by construction, so these are only attached when
+// a caller explicitly asks for it (RunAgentOptions.captureToolContent).
+export const GEN_AI_TOOL_CALL_ARGUMENTS = "gen_ai.tool.call.arguments";
+export const GEN_AI_TOOL_CALL_RESULT = "gen_ai.tool.call.result";
+
 // Standard OTel span attribute (not GenAI-specific) — the spec's answer to
 // this project's originally-planned custom "tool.error_class".
 export const ERROR_TYPE = "error.type";
